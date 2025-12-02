@@ -344,4 +344,4 @@ function shade(hex, percent) {
     return `#${nr.toString(16).padStart(2,"0")}${ng.toString(16).padStart(2,"0")}${nb.toString(16).padStart(2,"0")}`;
   } catch { return hex; }
 }
-function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }gi
+function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
