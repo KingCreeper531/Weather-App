@@ -19,6 +19,10 @@
       <div class="controls">
         <input id="search" type="text" placeholder="Enter city or ZIP (e.g. 43780)" />
         <button id="goBtn" class="btn">Get weather</button>
+        <div class="unit-toggle">
+          <button id="unitF" class="toggle active" data-unit="F">°F</button>
+          <button id="unitC" class="toggle" data-unit="C">°C</button>
+        </div>
       </div>
     </header>
 
@@ -35,10 +39,10 @@
             <div class="location" id="locName">Enter a location to begin</div>
             <div class="temp" id="nowTemp">--°</div>
             <div class="summary" id="nowSummary">No data loaded yet</div>
-            <div class="meta" id="nowMeta">Wind -- mph • Humidity --%</div>
+            <div class="meta" id="nowMeta">Wind -- • Humidity --%</div>
           </div>
           <div class="hero-right">
-            <svg id="icon" viewBox="0 0 64 64" class="weather-icon">
+            <svg id="icon" viewBox="0 0 64 64" class="weather-icon" aria-hidden="true">
               <circle cx="22" cy="22" r="12" class="icon-sun"></circle>
               <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
             </svg>
@@ -62,7 +66,10 @@
       <section class="tab-content hidden" id="waterTab">
         <section class="card" id="waterCard">
           <h2 class="card-title">Water Conditions</h2>
-          <div class="meta" id="waterMeta">Enter a location to see water data.</div>
+          <div class="meta" id="waterMeta">Loading...</div>
+          <div class="radar-wrap">
+            <iframe id="waterFrame" title="NOAA Water Map" src="" width="100%" height="520" loading="lazy"></iframe>
+          </div>
         </section>
       </section>
     </main>
