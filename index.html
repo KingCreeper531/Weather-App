@@ -2,62 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Storm Surge Weather</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body data-theme="dark">
-  <header>
-    <h1>Storm Surge</h1>
-    <form id="search-form">
-      <input type="text" id="search-input" placeholder="Enter ZIP, city, or address (e.g., 43780 or 1600 Pennsylvania Ave)" />
+<body>
+  <header class="ssw-header">
+    <div class="brand">
+      <div class="logo"></div>
+      <span>Storm Surge Weather</span>
+    </div>
+    <form id="search-form" autocomplete="off" class="search">
+      <input id="search-input" type="text"
+             placeholder="Enter ZIP, city, or address (e.g., 43780 or 1600 Pennsylvania Ave)"
+             aria-label="Location" />
       <button type="submit">Get Weather</button>
     </form>
     <div class="header-controls">
-      <button id="unit-toggle">°F / °C</button>
-      <button id="theme-toggle">Toggle Theme</button>
+      <button id="unit-toggle" class="chip">°F / °C</button>
     </div>
   </header>
 
-  <main>
-    <section class="current">
-      <h2 id="location-title">Enter a location to begin</h2>
-      <div class="temp-display">
-        <span id="temp-f">--°F</span>
-        <span id="temp-c">--°C</span>
+  <main class="ssw-container">
+    <section class="card current">
+      <div class="card-head">
+        <h2 id="location-title">Enter a location to begin</h2>
+        <div id="updated-at" class="muted">—</div>
       </div>
-      <p id="status">No data loaded yet</p>
-      <p id="wind-humidity">Wind -- • Humidity --%</p>
-      <div class="weather-art">
-        <div class="sun"></div>
-        <div class="cloud"></div>
+      <div class="current-row">
+        <div class="dual-temp">
+          <div class="temp-primary" id="temp-f">--°F</div>
+          <div class="temp-secondary" id="temp-c">--°C</div>
+        </div>
+        <div class="conditions">
+          <div class="cond-line"><span class="icon wind"></span><span id="wind-humidity">Wind -- • Humidity --%</span></div>
+          <div class="cond-line"><span class="icon alert"></span><span id="status">No data loaded yet</span></div>
+        </div>
+        <div class="art">
+          <div class="sun"></div>
+          <div class="cloud"></div>
+        </div>
       </div>
-      <div id="alerts"></div>
+      <div id="alerts" class="alerts"></div>
     </section>
 
-    <section>
-      <h2>Today at a glance</h2>
-      <div id="today-glance"></div>
+    <section class="card today">
+      <div class="card-head"><h3>Today at a glance</h3></div>
+      <div id="today-glance" class="today-body"></div>
     </section>
 
-    <section>
-      <h2>7-day forecast</h2>
+    <section class="card forecast">
+      <div class="card-head"><h3>7-day forecast</h3></div>
       <div id="forecast" class="forecast-grid"></div>
     </section>
 
-    <section>
-      <h2>Radar</h2>
-      <iframe id="radar" loading="lazy"></iframe>
+    <section class="card radar">
+      <div class="card-head">
+        <h3>Radar</h3>
+        <div class="actions">
+          <button class="chip" id="open-rainviewer">Open full radar</button>
+        </div>
+      </div>
+      <iframe id="radar" title="RainViewer Radar" loading="lazy"></iframe>
     </section>
 
-    <section>
-      <h2>NOAA Water</h2>
-      <p id="water-status">Loading...</p>
+    <section class="card water">
+      <div class="card-head"><h3>Rivers and flood (nearby gauges)</h3></div>
+      <div class="water-body">
+        <div id="water-status" class="muted">Loading...</div>
+        <div id="gauges" class="gauges"></div>
+        <div class="note muted">Live USGS streamflow (cfs) and stage (ft). For inundation maps, open NOAA Water.</div>
+        <div class="actions">
+          <button class="chip" id="open-water">Open NOAA Water</button>
+        </div>
+      </div>
     </section>
   </main>
 
-  <footer>
-    <p>Powered by NWS, NOAA, and RainViewer</p>
+  <footer class="ssw-footer">
+    <div>Data: NWS api.weather.gov • RainViewer • USGS Water Services • NOAA Water</div>
+    <div class="muted">User-Agent set: StormSurgeWeather (contact: stormsurgee025@gmail.com)</div>
   </footer>
 
   <script src="app.js"></script>
