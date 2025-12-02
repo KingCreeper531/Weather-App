@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pixel Weather</title>
+  <title>Storm Surge Weather</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- Inter font for sleek UI -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -15,54 +14,78 @@
     <header class="topbar">
       <div class="brand">
         <div class="logo-dot"></div>
-        <span class="brand-text">Pixel Weather</span>
+        <span class="brand-text">Storm Surge Weather</span>
       </div>
       <div class="controls">
-        <input id="zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP code (e.g. 43780)" />
+        <input id="zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP code (e.g. 43215)" />
         <button id="goBtn" class="btn">Get weather</button>
       </div>
     </header>
 
+    <nav class="tabs">
+      <button class="tab active" data-tab="weather">Weather</button>
+      <button class="tab" data-tab="water">Water</button>
+      <button class="tab" data-tab="snow">Snow</button>
+    </nav>
+
     <main id="content">
-      <section id="nowCard" class="card card-hero hidden">
-        <div class="hero-left">
-          <div class="temp" id="nowTemp">--°</div>
-          <div class="summary" id="nowSummary">Enter a ZIP to get started</div>
-          <div class="meta">
-            <span id="nowFeels">Feels like --°</span>
-            <span id="nowWind">Wind -- mph</span>
-            <span id="nowHum">Humidity --%</span>
+      <!-- Weather Tab -->
+      <section class="tab-content" id="weatherTab">
+        <div id="nowCard" class="card card-hero hidden">
+          <div class="hero-left">
+            <div class="location" id="locName">Columbus, OH</div>
+            <div class="temp" id="nowTemp">--°</div>
+            <div class="summary" id="nowSummary">Loading...</div>
+            <div class="meta">
+              <span id="nowFeels">Feels like --°</span>
+              <span id="nowWind">Wind -- mph</span>
+              <span id="nowHum">Humidity --%</span>
+            </div>
+          </div>
+          <div class="hero-right">
+            <svg id="icon" viewBox="0 0 64 64" class="weather-icon">
+              <circle cx="22" cy="22" r="12" class="icon-sun"></circle>
+              <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
+            </svg>
           </div>
         </div>
-        <div class="hero-right">
-          <svg id="icon" viewBox="0 0 64 64" class="weather-icon">
-            <circle cx="22" cy="22" r="12" class="icon-sun"></circle>
-            <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
-          </svg>
-        </div>
+
+        <section class="card hidden" id="hourlyCard">
+          <h2 class="card-title">Next 12 hours</h2>
+          <div class="hours" id="hours"></div>
+        </section>
+
+        <section class="card hidden" id="dailyCard">
+          <h2 class="card-title">10‑day forecast</h2>
+          <div class="days" id="days"></div>
+        </section>
       </section>
 
-      <section class="card hidden" id="todayGrid">
-        <h2 class="card-title">Rest of today</h2>
-        <div class="hours" id="hours"></div>
+      <!-- Water Tab -->
+      <section class="tab-content hidden" id="waterTab">
+        <section class="card" id="waterCard">
+          <h2 class="card-title">Water Conditions</h2>
+          <div class="meta" id="waterMeta">Loading...</div>
+        </section>
+        <section class="card" id="radarCard">
+          <h2 class="card-title">Radar</h2>
+          <div class="radar-wrap">
+            <iframe id="radarFrame" title="Radar" src="" width="100%" height="520" loading="lazy"></iframe>
+          </div>
+        </section>
       </section>
 
-      <section class="card hidden" id="radarCard">
-        <h2 class="card-title">Radar (regional)</h2>
-        <div class="radar-wrap">
-          <iframe
-            title="Radar"
-            src="https://radar.weather.gov/ridge/lite/N0R/ILN_loop.gif"
-            width="600"
-            height="600"
-            loading="lazy"
-          ></iframe>
-        </div>
+      <!-- Snow Tab -->
+      <section class="tab-content hidden" id="snowTab">
+        <section class="card" id="snowCard">
+          <h2 class="card-title">Snow Conditions</h2>
+          <div class="meta" id="snowMeta">Loading...</div>
+        </section>
       </section>
     </main>
 
     <footer class="footer">
-      <span>Data: Open‑Meteo (no API key; free for non‑commercial use)</span>
+      <span>Data: Open‑Meteo (no API key)</span>
       <span>Built by Jakob</span>
     </footer>
   </div>
