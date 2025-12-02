@@ -1,78 +1,105 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Storm Surge — Recode</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Storm Surge Weather</title>
+  <meta name="description" content="Storm Surge Weather — Pixel-inspired, fast, and clean weather with radar and water insights." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
 </head>
-<body>
-  <div class="app">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo-dot"></div>
-        <span class="brand-text">Storm Surge</span>
+<body data-theme="dark">
+  <header class="pw-header">
+    <div class="brand">
+      <div class="logo"></div>
+      <span>Storm Surge Weather</span>
+    </div>
+    <div class="controls">
+      <form id="search-form" autocomplete="off">
+        <input id="search-input" type="text" placeholder="Enter city or ZIP" aria-label="Location" />
+        <button id="search-btn" type="submit">Search</button>
+      </form>
+      <button id="theme-toggle" aria-label="Toggle theme">Theme</button>
+    </div>
+  </header>
+
+  <main class="pw-container">
+    <section class="card current">
+      <div class="card-head">
+        <h2 id="location-title">Enter a location to begin</h2>
+        <div id="updated-at" class="muted">—</div>
       </div>
-      <div class="controls">
-        <input id="search" type="text" placeholder="Enter ZIP, city, or address (e.g. 43780 or 1600 Pennsylvania Ave)" />
-        <button id="goBtn" class="btn-primary">Get Weather</button>
+      <div class="current-row">
+        <div class="dual-temp">
+          <div class="temp-primary" id="temp-f">--°F</div>
+          <div class="temp-secondary" id="temp-c">--°C</div>
+          <button id="swap-units" class="chip">Swap</button>
+        </div>
+        <div class="conditions">
+          <div class="cond-line">
+            <span class="icon wind"></span>
+            <span id="wind">Wind --</span>
+          </div>
+          <div class="cond-line">
+            <span class="icon humidity"></span>
+            <span id="humidity">Humidity --%</span>
+          </div>
+          <div class="cond-line">
+            <span class="icon alert"></span>
+            <span id="alerts">No alerts</span>
+          </div>
+        </div>
+        <div class="art">
+          <div class="sun"></div>
+          <div class="cloud"></div>
+        </div>
       </div>
-    </header>
+    </section>
 
-    <main class="grid">
-      <section class="card hero" id="nowCard">
-        <div class="skeleton" id="nowSkeleton"></div>
-        <div class="hero-left">
-          <div class="location" id="locName">Enter a location to begin</div>
-          <div class="temp" id="nowTemp">--°F<br>--°C</div>
-          <div class="summary" id="nowSummary">No data loaded yet</div>
-          <div class="meta" id="nowMeta">Wind -- • Humidity --%</div>
+    <section class="grid">
+      <div class="card forecast">
+        <div class="card-head"><h3>Forecast</h3></div>
+        <div id="forecast-list" class="forecast-list">
+          <!-- Filled by JS -->
         </div>
-        <div class="hero-right">
-          <svg id="icon" viewBox="0 0 64 64" class="weather-icon" aria-hidden="true">
-            <circle cx="22" cy="22" r="12" class="icon-sun"></circle>
-            <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
-          </svg>
+      </div>
+
+      <div class="card radar">
+        <div class="card-head">
+          <h3>Radar</h3>
+          <div class="actions">
+            <button class="chip" id="open-rainviewer">Open full radar</button>
+          </div>
         </div>
-      </section>
+        <iframe id="rainviewer-embed" title="RainViewer Radar" loading="lazy"></iframe>
+      </div>
 
-      <section class="card" id="hourlyCard">
-        <h2 class="card-title">Today at a glance</h2>
-        <div class="skeleton" id="hourlySkeleton"></div>
-        <div class="hourly" id="hourly"></div>
-      </section>
-
-      <section class="card" id="dailyCard">
-        <h2 class="card-title">7‑day forecast</h2>
-        <div class="skeleton" id="dailySkeleton"></div>
-        <div class="days" id="days"></div>
-      </section>
-
-      <section class="card" id="radarCard">
-        <h2 class="card-title">Radar</h2>
-        <div class="radar-wrap">
-          <iframe id="radarFrame" title="Radar" src="" width="100%" height="420" loading="lazy"></iframe>
+      <div class="card water">
+        <div class="card-head">
+          <h3>River and flood</h3>
+          <div class="actions">
+            <button class="chip" id="open-water">Open water dashboard</button>
+          </div>
         </div>
-      </section>
-
-      <section class="card" id="waterCard">
-        <h2 class="card-title">NOAA Water</h2>
-        <div class="meta" id="waterMeta">Loading...</div>
-        <div class="radar-wrap">
-          <iframe id="waterFrame" title="NOAA Water Map" src="" width="100%" height="420" loading="lazy"></iframe>
+        <div class="water-body">
+          <div class="gauges">
+            <div class="gauge-item"><span class="chip good">Flow</span><span id="flow">—</span></div>
+            <div class="gauge-item"><span class="chip warn">Flood risk</span><span id="flood">—</span></div>
+          </div>
+          <div class="note muted">Experimental layers from NOAA’s National Water Prediction Service.</div>
         </div>
-      </section>
-    </main>
+      </div>
+    </section>
+  </main>
 
-    <footer class="footer">
-      <span>Data: Zipcodebase, Open‑Meteo/Nominatim, NWS, RainViewer, NOAA Water</span>
-      <span>Built by Jakob</span>
-    </footer>
-  </div>
+  <footer class="pw-footer">
+    <div>Data: NWS api.weather.gov • NOAA National Water Prediction Service • RainViewer</div>
+    <div class="muted">Storm Surge Weather — Pixel-inspired UI.</div>
+  </footer>
 
-  <script src="script.js"></script>
+  <script src="assets/app.js"></script>
 </body>
 </html>
