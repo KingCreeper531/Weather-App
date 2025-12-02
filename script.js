@@ -1,5 +1,5 @@
 // Storm Surge — Recode
-// ZIP (Zipcodebase) + City (Open‑Meteo) → NWS forecast, RainViewer radar, NOAA Water
+// ZIP (Zipcodebase) + City/Address (Mapbox + Open‑Meteo + Nominatim fallback) → NWS forecast, RainViewer radar, NOAA Water
 // Dual °F/°C, hourly glance, 7‑day, resilient errors, auto refresh
 
 const searchInput = document.getElementById("search");
@@ -22,8 +22,9 @@ const dailySkeleton = document.getElementById("dailySkeleton");
 
 let lastContext = null;
 
-// Replace with your key or keep as env injected via build tooling
+// ✅ API keys
 const ZIPCODEBASE_KEY = "0d3e1960-cfc1-11f0-88a7-ab5476d59c85";
+const MAPBOX_KEY = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2aTlqeTN5OSJ9.QYtnuhdixR4SGxLQldE9PA";
 
 goBtn.addEventListener("click", () => {
   const q = searchInput.value.trim();
@@ -34,7 +35,7 @@ searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") goBtn.click();
 });
 
-// Periodic refresh
+// Auto-refresh every 5 minutes
 setInterval(() => {
   if (lastContext?.lat && lastContext?.lon && lastContext?.label) {
     getForecast(lastContext.lat, lastContext.lon, lastContext.label);
@@ -54,40 +55,78 @@ async function run(query) {
   }
 }
 
-// Resolve location via ZIP (Zipcodebase) or city (Open‑Meteo)
-async function resolveLocation(query) {
+// Location resolution
+async function resolveLocation(rawQuery) {
+  const q = rawQuery.trim().replace(/\s+/g, " ");
   let lat, lon, label;
-  const q = query.trim();
 
-  if (/^\d{5}$/.test(q)) {
-    const url = `https://app.zipcodebase.com/api/v1/search?codes=${q}&country=US`;
+  // ZIP
+  const zipMatch = q.match(/^\d{5}(-\d{4})?$/);
+  if (zipMatch) {
+    const zip5 = q.slice(0, 5);
+    const url = `https://app.zipcodebase.com/api/v1/search?codes=${zip5}&country=US`;
     const res = await fetch(url, { headers: { apikey: ZIPCODEBASE_KEY } });
     if (!res.ok) throw new Error("ZIP lookup failed.");
     const data = await res.json();
-    if (!data.results || !data.results[q] || !data.results[q].length) {
+    if (!data.results || !data.results[zip5] || !data.results[zip5].length) {
       throw new Error("ZIP not found.");
     }
-    const loc = data.results[q][0];
+    const loc = data.results[zip5][0];
     lat = loc.latitude;
     lon = loc.longitude;
     label = `${loc.city}, ${loc.state_code}`;
-  } else {
-    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`);
-    if (!geoRes.ok) throw new Error("City lookup failed.");
-    const geo = await geoRes.json();
-    if (!geo.results?.length) throw new Error("Location not found.");
-    const place = geo.results[0];
-    lat = place.latitude;
-    lon = place.longitude;
-    label = place.name + (place.admin1 ? `, ${place.admin1}` : "");
+    return { lat, lon, label };
   }
 
-  return { lat, lon, label };
+  // Mapbox
+  const mapboxUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?limit=1&access_token=${MAPBOX_KEY}`;
+  const mapboxRes = await fetch(mapboxUrl);
+  if (mapboxRes.ok) {
+    const data = await mapboxRes.json();
+    if (data.features && data.features.length) {
+      const f = data.features[0];
+      lon = f.center[0];
+      lat = f.center[1];
+      label = f.place_name;
+      return { lat, lon, label };
+    }
+  }
+
+  // Open‑Meteo fallback
+  const omUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
+  const omRes = await fetch(omUrl);
+  if (omRes.ok) {
+    const om = await omRes.json();
+    if (om.results?.length) {
+      const place = om.results[0];
+      lat = place.latitude;
+      lon = place.longitude;
+      label = place.name + (place.admin1 ? `, ${place.admin1}` : "");
+      return { lat, lon, label };
+    }
+  }
+
+  // Nominatim fallback
+  const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=jsonv2&limit=1`;
+  const nomRes = await fetch(nomUrl, {
+    headers: { "User-Agent": "StormSurgeRecode/1.0" }
+  });
+  if (nomRes.ok) {
+    const nom = await nomRes.json();
+    if (Array.isArray(nom) && nom.length) {
+      const f = nom[0];
+      lat = Number(f.lat);
+      lon = Number(f.lon);
+      label = f.display_name;
+      return { lat, lon, label };
+    }
+  }
+
+  throw new Error("Location not found.");
 }
 
-// Fetch forecast from NWS for given lat/lon
+// Forecast
 async function getForecast(lat, lon, label) {
-  // Points lookup
   const pointsUrl = `https://api.weather.gov/points/${lat},${lon}`;
   const pointRes = await fetch(pointsUrl, {
     headers: { "Accept": "application/ld+json", "User-Agent": "StormSurgeRecode/1.0" }
@@ -99,11 +138,9 @@ async function getForecast(lat, lon, label) {
   const hourlyUrl = pointData?.properties?.forecastHourly;
   if (!forecastUrl) throw new Error("No forecast URL for location.");
 
-  // Radar + Water embeds
   setRadar(lat, lon);
   setWater(lat, lon, label);
 
-  // Forecast data
   const forecastRes = await fetch(forecastUrl, {
     headers: { "Accept": "application/ld+json", "User-Agent": "StormSurgeRecode/1.0" }
   });
@@ -122,9 +159,7 @@ async function getForecast(lat, lon, label) {
         const hourlyData = await hourlyRes.json();
         hourlyPeriods = hourlyData?.properties?.periods?.slice(0, 8) || [];
       }
-    } catch {
-      // ignore hourly failure
-    }
+    } catch {}
   }
 
   lastContext = { lat, lon, label };
@@ -171,7 +206,7 @@ function renderHourly(periods) {
   for (const p of periods) {
     const t = new Date(p.startTime);
     const time = t.toLocaleTimeString([], { hour: "numeric" });
-    const div = document.createElement("div");
+       const div = document.createElement("div");
     div.className = "hr";
     div.innerHTML = `
       <div class="hr-time">${time}</div>
@@ -255,4 +290,4 @@ function formatDualTemp(value, inputUnit) {
   const f = inputUnit === "C" ? Math.round((v * 9 / 5) + 32) : Math.round(v);
   const c = inputUnit === "F" ? Math.round((v - 32) * 5 / 9) : Math.round(v);
   return `${f}°F<br>${c}°C`;
-}
+} 
