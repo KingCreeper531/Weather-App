@@ -1,38 +1,27 @@
-// Storm Surge Weather — Open‑Meteo powered
-// Features: city/ZIP search via Open‑Meteo geocoding, dynamic theming,
-// current + hourly (12h) + 10-day forecasts, Water & Snow tabs, RainViewer radar.
+// Storm Surge Weather — Open‑Meteo (weather) + NOAA Water (NWPS) for water data
+// No default location: user must enter a city or ZIP, then we fetch data.
 
-// --- Elements ---
 const searchInput = document.getElementById("search");
 const goBtn = document.getElementById("goBtn");
+const locNameEl = document.getElementById("locName");
+const radarFrame = document.getElementById("radarFrame");
+
+const tabs = document.querySelectorAll(".tab");
+const tabContents = document.querySelectorAll(".tab-content");
 
 const nowCard = document.getElementById("nowCard");
 const hourlyCard = document.getElementById("hourlyCard");
 const dailyCard = document.getElementById("dailyCard");
 const radarCard = document.getElementById("radarCard");
-const radarFrame = document.getElementById("radarFrame");
 
-const locNameEl = document.getElementById("locName");
-
-const tabs = document.querySelectorAll(".tab");
-const tabContents = document.querySelectorAll(".tab-content");
-
-// --- Constants ---
-const DEFAULT = { name: "Columbus, OH", lat: 39.9612, lon: -82.9988 };
-
-// --- Init ---
-init();
-
-function init() {
-  attachEvents();
-  loadByCoords(DEFAULT.lat, DEFAULT.lon, DEFAULT.name);
-}
+// Init: attach events only
+attachEvents();
 
 function attachEvents() {
   goBtn.addEventListener("click", () => {
     const q = searchInput.value.trim();
     if (!q) {
-      loadByCoords(DEFAULT.lat, DEFAULT.lon, DEFAULT.name);
+      showError("Enter a city or ZIP to load weather.");
       return;
     }
     resolveLocation(q);
@@ -53,7 +42,7 @@ function attachEvents() {
   });
 }
 
-// --- Location resolution (city or ZIP) using Open‑Meteo geocoding ---
+// Location resolution (Open‑Meteo geocoding)
 async function resolveLocation(query) {
   try {
     const url = new URL("https://geocoding-api.open-meteo.com/v1/search");
@@ -75,13 +64,13 @@ async function resolveLocation(query) {
     const lat = place.latitude;
     const lon = place.longitude;
     const label = place.name + (place.admin1 ? `, ${place.admin1}` : "");
-    loadByCoords(lat, lon, label);
+    await loadByCoords(lat, lon, label);
   } catch (err) {
     showError(err.message || "Location error.");
   }
 }
 
-// --- Main loader: call Open‑Meteo forecast and render all tabs ---
+// Main loader (Open‑Meteo forecast)
 async function loadByCoords(lat, lon, label) {
   try {
     locNameEl.textContent = label;
@@ -89,58 +78,59 @@ async function loadByCoords(lat, lon, label) {
     const url = new URL("https://api.open-meteo.com/v1/forecast");
     url.searchParams.set("latitude", lat);
     url.searchParams.set("longitude", lon);
-    url.searchParams.set("current", [
-      "temperature_2m",
-      "relative_humidity_2m",
-      "wind_speed_10m",
-      "apparent_temperature",
-      "precipitation",
-      "weather_code",
-      "is_day"
-    ].join(","));
-    url.searchParams.set("hourly", [
-      "temperature_2m",
-      "relative_humidity_2m",
-      "wind_speed_10m",
-      "precipitation",
-      "precipitation_probability",
-      "weather_code"
-    ].join(","));
-    url.searchParams.set("daily", [
-      "temperature_2m_max",
-      "temperature_2m_min",
-      "precipitation_sum",
-      "precipitation_probability_max",
-      "weather_code",
-      "snowfall_sum",
-      "snow_depth"
-    ].join(","));
+    url.searchParams.set("current", "temperature_2m,relative_humidity_2m,wind_speed_10m,apparent_temperature,precipitation,weather_code,is_day");
+    url.searchParams.set("hourly", "temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation,precipitation_probability,weather_code");
+    url.searchParams.set("daily", "temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,weather_code,snowfall_sum,snow_depth");
     url.searchParams.set("temperature_unit", "fahrenheit");
     url.searchParams.set("wind_speed_unit", "mph");
     url.searchParams.set("precipitation_unit", "inch");
     url.searchParams.set("timezone", "auto");
 
     const res = await fetch(url.toString());
-    if (!res.ok) throw new Error("Failed to fetch forecast.");
+    if (!res.ok) throw new Error("Forecast fetch failed.");
     const data = await res.json();
 
-    // Render sections
     renderNow(data);
     renderHourly(data);
     renderDaily(data);
-    renderWater(data);
     renderSnow(data);
+
     setTheme(data);
     setRadar(lat, lon);
 
-    // Show cards
+    // Load NOAA water data after weather is set
+    loadWaterData(lat, lon, label);
+
     [nowCard, hourlyCard, dailyCard, radarCard].forEach(showCard);
   } catch (err) {
-    showError(err.message || "Forecast error.");
+    showError("Failed to fetch forecast.");
   }
 }
 
-// --- Current conditions ---
+// NOAA Water (NWPS) — basic fetch with fallback
+// NOTE: NWPS has multiple ArcGIS layers; for a simple client-side app,
+// we show a generic message and provide a link scoped near the searched location.
+async function loadWaterData(lat, lon, label) {
+  const waterMeta = document.getElementById("waterMeta");
+  try {
+    // Example ArcGIS service ping to confirm availability (no key)
+    const pingUrl = "https://maps.water.noaa.gov/server/rest/services/nwm/streamflow/MapServer?f=json";
+    const res = await fetch(pingUrl);
+    if (!res.ok) throw new Error("NOAA water service unavailable.");
+
+    // Provide a helpful link for local water details near the searched location
+    const nearbyLink = `https://water.noaa.gov/?lat=${lat}&lon=${lon}&zoom=9`;
+    waterMeta.innerHTML = `
+      🌊 NOAA Water service is available.<br>
+      🔗 View detailed local streamflow and flood info: <a href="${nearbyLink}" target="_blank" rel="noopener">NOAA Water (near ${label})</a><br>
+      ℹ️ Integrating per‑gauge data requires querying specific map layers; this app keeps it lightweight and client‑side.
+    `;
+  } catch (err) {
+    waterMeta.textContent = "Water data unavailable from NOAA at the moment.";
+  }
+}
+
+// Current conditions
 function renderNow(data) {
   const c = data.current;
   const temp = round(c.temperature_2m);
@@ -157,7 +147,7 @@ function renderNow(data) {
   setIconTheme(c.weather_code, c.is_day === 1);
 }
 
-// --- Hourly (next 12 hours) ---
+// Hourly (next 12 hours)
 function renderHourly(data) {
   const times = data.hourly.time;
   const temps = data.hourly.temperature_2m;
@@ -201,7 +191,7 @@ function renderHourly(data) {
   }
 }
 
-// --- Daily (10‑day) ---
+// Daily (10‑day)
 function renderDaily(data) {
   const daysWrap = document.getElementById("days");
   daysWrap.innerHTML = "";
@@ -234,23 +224,7 @@ function renderDaily(data) {
   }
 }
 
-// --- Water tab ---
-function renderWater(data) {
-  const hum = round(data.current.relative_humidity_2m);
-  const prec = formatInches(data.current.precipitation);
-  const feels = round(data.current.apparent_temperature);
-  const wind = round(data.current.wind_speed_10m);
-
-  const html = `
-    💧 Humidity: ${hum}%<br>
-    ☔ Precipitation (current): ${prec}<br>
-    💨 Wind: ${wind} mph<br>
-    🧊 Feels like: ${feels}°
-  `;
-  document.getElementById("waterMeta").innerHTML = html;
-}
-
-// --- Snow tab ---
+// Snow tab (uses Open‑Meteo daily snowfall and depth)
 function renderSnow(data) {
   const daily = data.daily;
   const snowDepth = formatInches(daily.snow_depth?.[0]);
@@ -267,7 +241,7 @@ function renderSnow(data) {
   document.getElementById("snowMeta").innerHTML = html;
 }
 
-// --- Theming based on current weather and day/night ---
+// Theming based on current weather and day/night
 function setTheme(data) {
   const code = data.current.weather_code;
   const isDay = data.current.is_day === 1;
@@ -290,13 +264,13 @@ function setTheme(data) {
   setCSS("--theme-shadow", shadow);
 }
 
-// --- Radar (RainViewer embed) ---
+// Radar under Weather
 function setRadar(lat, lon) {
   const url = `https://www.rainviewer.com/map.html?loc=${lat},${lon},7&layer=radar&overlay=0&zoom=7&do=radar;`;
   radarFrame.src = url;
 }
 
-// --- Icon emphasis ---
+// Icon emphasis
 function setIconTheme(code, isDay) {
   const sun = document.querySelector(".icon-sun");
   const cloud = document.querySelector(".icon-cloud");
@@ -312,7 +286,7 @@ function setIconTheme(code, isDay) {
   else if ([95,96,99].includes(code)) { sun.style.opacity = "0.15"; cloud.style.opacity = "1"; }
 }
 
-// --- Utilities ---
+// Utilities
 function showCard(el) { el.classList.remove("hidden"); el.classList.add("show"); }
 function showError(msg) {
   showCard(nowCard);
@@ -329,7 +303,6 @@ function formatInches(x) {
   const v = Number(x ?? 0);
   return `${v.toFixed(2)}"`;
 }
-
 // Shade hex color by percentage (-100..100)
 function shade(hex, percent) {
   try {

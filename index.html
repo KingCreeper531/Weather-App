@@ -17,7 +17,7 @@
         <span class="brand-text">Storm Surge Weather</span>
       </div>
       <div class="controls">
-        <input id="search" type="text" placeholder="City or ZIP (e.g. Columbus or 43215)" />
+        <input id="search" type="text" placeholder="Enter city or ZIP (e.g. Columbus or 43215)" />
         <button id="goBtn" class="btn">Get weather</button>
       </div>
     </header>
@@ -33,9 +33,9 @@
       <section class="tab-content" id="weatherTab">
         <div id="nowCard" class="card card-hero hidden">
           <div class="hero-left">
-            <div class="location" id="locName">Columbus, OH</div>
+            <div class="location" id="locName">Enter a location to begin</div>
             <div class="temp" id="nowTemp">--°</div>
-            <div class="summary" id="nowSummary">Loading...</div>
+            <div class="summary" id="nowSummary">No data loaded yet</div>
             <div class="meta">
               <span id="nowFeels">Feels like --°</span>
               <span id="nowWind">Wind -- mph</span>
@@ -43,7 +43,7 @@
             </div>
           </div>
           <div class="hero-right">
-            <svg id="icon" viewBox="0 0 64 64" class="weather-icon">
+            <svg id="icon" viewBox="0 0 64 64" class="weather-icon" aria-hidden="true">
               <circle cx="22" cy="22" r="12" class="icon-sun"></circle>
               <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
             </svg>
@@ -60,7 +60,7 @@
           <div class="days" id="days"></div>
         </section>
 
-        <!-- Radar now under Weather -->
+        <!-- Radar under Weather -->
         <section class="card hidden" id="radarCard">
           <h2 class="card-title">Radar</h2>
           <div class="radar-wrap">
@@ -72,22 +72,22 @@
       <!-- Water Tab -->
       <section class="tab-content hidden" id="waterTab">
         <section class="card" id="waterCard">
-          <h2 class="card-title">Water Conditions</h2>
-          <div class="meta" id="waterMeta">Loading...</div>
+          <h2 class="card-title">Water conditions</h2>
+          <div class="meta" id="waterMeta">Enter a location to see water data.</div>
         </section>
       </section>
 
       <!-- Snow Tab -->
       <section class="tab-content hidden" id="snowTab">
         <section class="card" id="snowCard">
-          <h2 class="card-title">Snow Conditions</h2>
-          <div class="meta" id="snowMeta">Loading...</div>
+          <h2 class="card-title">Snow conditions</h2>
+          <div class="meta" id="snowMeta">Enter a location to see snow data.</div>
         </section>
       </section>
     </main>
 
     <footer class="footer">
-      <span>Data: Open‑Meteo & NOAA NWPS</span>
+      <span>Data: Open‑Meteo (weather) & NOAA Water (NWPS)</span>
       <span>Built by Jakob</span>
     </footer>
   </div>
