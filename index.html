@@ -1,22 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Weather App</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pixel Weather</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Inter font for sleek UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <h1>Weather App</h1>
-  <input type="text" id="zip" placeholder="Enter ZIP code">
-  <button onclick="getWeather()">Get Weather</button>
-  
-  <div id="weather"></div>
-  
-  <h2>Radar</h2>
-  <!-- Simple embedded radar loop -->
-  <iframe src="https://radar.weather.gov/ridge/lite/N0R/ILN_loop.gif" 
-          width="600" height="600"></iframe>
-  
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo-dot"></div>
+        <span class="brand-text">Pixel Weather</span>
+      </div>
+      <div class="controls">
+        <input id="zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP code (e.g. 43780)" />
+        <button id="goBtn" class="btn">Get weather</button>
+      </div>
+    </header>
+
+    <main id="content">
+      <section id="nowCard" class="card card-hero hidden">
+        <div class="hero-left">
+          <div class="temp" id="nowTemp">--°</div>
+          <div class="summary" id="nowSummary">Enter a ZIP to get started</div>
+          <div class="meta">
+            <span id="nowFeels">Feels like --°</span>
+            <span id="nowWind">Wind -- mph</span>
+            <span id="nowHum">Humidity --%</span>
+          </div>
+        </div>
+        <div class="hero-right">
+          <svg id="icon" viewBox="0 0 64 64" class="weather-icon">
+            <!-- simple sun/cloud icon; replaced dynamically -->
+            <circle cx="22" cy="22" r="12" class="icon-sun"></circle>
+            <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
+          </svg>
+        </div>
+      </section>
+
+      <section class="card hidden" id="todayGrid">
+        <h2 class="card-title">Rest of today</h2>
+        <div class="hours" id="hours"></div>
+      </section>
+
+      <section class="card hidden" id="radarCard">
+        <h2 class="card-title">Radar (regional)</h2>
+        <div class="radar-wrap">
+          <!-- Swap to your local WFO radar if desired -->
+          <iframe
+            title="Radar"
+            src="https://radar.weather.gov/ridge/lite/N0R/ILN_loop.gif"
+            width="600"
+            height="600"
+            loading="lazy"
+          ></iframe>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Data: Open‑Meteo (no API key; free for non‑commercial use)</span>
+      <span>Built by Jakob</span>
+    </footer>
+  </div>
+
   <script src="script.js"></script>
 </body>
 </html>
