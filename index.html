@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Weather App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Weather App</h1>
+  <input type="text" id="zip" placeholder="Enter ZIP code">
+  <button onclick="getWeather()">Get Weather</button>
+  
+  <div id="weather"></div>
+  
+  <h2>Radar</h2>
+  <!-- Simple embedded radar loop -->
+  <iframe src="https://radar.weather.gov/ridge/lite/N0R/ILN_loop.gif" 
+          width="600" height="600"></iframe>
+  
+  <script src="script.js"></script>
+</body>
+</html>

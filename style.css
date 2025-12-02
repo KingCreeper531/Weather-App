@@ -1,0 +1,30 @@
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  background: #f0f4f8;
+  color: #333;
+}
+
+h1 {
+  margin-top: 20px;
+}
+
+input {
+  padding: 8px;
+  margin: 10px;
+  width: 200px;
+}
+
+button {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+#weather {
+  margin-top: 20px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  display: inline-block;
+  text-align: left;
+}
