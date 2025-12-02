@@ -1,11 +1,7 @@
-// Storm Surge Weather — NWS + NOAA Water, ZIP & city search, °F/°C toggle, radar embed, live refresh
+// Storm Surge Weather — NWS + NOAA Water, ZIP & city search, dual °F/°C display, radar embed, live refresh
 
-// Elements
 const searchInput = document.getElementById("search");
 const goBtn = document.getElementById("goBtn");
-const unitFBtn = document.getElementById("unitF");
-const unitCBtn = document.getElementById("unitC");
-
 const tabs = document.querySelectorAll(".tab");
 const tabContents = document.querySelectorAll(".tab-content");
 
@@ -17,29 +13,19 @@ const radarFrame = document.getElementById("radarFrame");
 const waterMeta = document.getElementById("waterMeta");
 const waterFrame = document.getElementById("waterFrame");
 
-// State
-let unit = "F"; // "F" or "C"
-let lastContext = null; // { lat, lon, label, periods }
-
-// Geocodio API key
+let lastContext = null;
 const GEOCODIO_KEY = "a21c2a2fa1cf6a93cc912a2c20643a4f293c641";
 
-// Event wiring
+// Events
 goBtn.addEventListener("click", () => {
   const q = searchInput.value.trim();
-  if (!q) {
-    showError("Enter a city or ZIP to load weather.");
-    return;
-  }
+  if (!q) return;
   resolveLocation(q);
 });
 
 searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") goBtn.click();
 });
-
-unitFBtn.addEventListener("click", () => setUnit("F"));
-unitCBtn.addEventListener("click", () => setUnit("C"));
 
 tabs.forEach(tab => {
   tab.addEventListener("click", () => {
@@ -57,18 +43,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// Unit toggle
-function setUnit(next) {
-  unit = next;
-  unitFBtn.classList.toggle("active", unit === "F");
-  unitCBtn.classList.toggle("active", unit === "C");
-  if (lastContext?.periods) {
-    renderNow(lastContext.periods[0], lastContext.label);
-    renderDaily(lastContext.periods);
-  }
-}
-
-// Location resolution: ZIP via Geocodio, else city via Open‑Meteo geocoding
+// Location resolution
 async function resolveLocation(query) {
   try {
     let lat, lon, label;
@@ -84,9 +59,7 @@ async function resolveLocation(query) {
       lon = loc.lng;
       label = data.results[0].address_components.city + ", " + data.results[0].address_components.state;
     } else {
-      const geoRes = await fetch(
-        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`
-      );
+      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`);
       if (!geoRes.ok) throw new Error("City lookup failed.");
       const geo = await geoRes.json();
       if (!geo.results?.length) throw new Error("Location not found.");
@@ -102,14 +75,14 @@ async function resolveLocation(query) {
   }
 }
 
-// NWS forecast fetch and render
+// NWS forecast
 async function getNWSForecast(lat, lon, label) {
   try {
     const pointsUrl = `https://api.weather.gov/points/${lat},${lon}`;
     const pointRes = await fetch(pointsUrl, {
       headers: {
         "Accept": "application/ld+json",
-        "User-Agent": "StormSurgeWeather/1.0 (https://kingcreeper531.github.io/Weather-App)"
+        "User-Agent": "StormSurgeWeather/1.0"
       }
     });
     if (!pointRes.ok) throw new Error("NWS points request failed.");
@@ -118,14 +91,12 @@ async function getNWSForecast(lat, lon, label) {
     const forecastUrl = pointData?.properties?.forecast;
     if (!forecastUrl) throw new Error("No forecast URL for location.");
 
-    // Set radar early
     setRadar(lat, lon);
 
-    // Forecast
     const forecastRes = await fetch(forecastUrl, {
       headers: {
         "Accept": "application/ld+json",
-        "User-Agent": "StormSurgeWeather/1.0 (https://kingcreeper531.github.io/Weather-App)"
+        "User-Agent": "StormSurgeWeather/1.0"
       }
     });
     if (!forecastRes.ok) throw new Error("NWS forecast request failed.");
@@ -140,7 +111,6 @@ async function getNWSForecast(lat, lon, label) {
     setTheme(periods[0]);
     showCard(radarCard);
 
-    // Water embed
     loadWaterData(lat, lon, label);
   } catch (err) {
     showError(err.message || "Failed to fetch NWS forecast.");
@@ -150,12 +120,10 @@ async function getNWSForecast(lat, lon, label) {
 // Render current conditions
 function renderNow(period, label) {
   locNameEl.textContent = label;
-  setText("nowTemp", formatTemp(period.temperature, period.temperatureUnit));
+  setText("nowTemp", formatDualTemp(period.temperature, period.temperatureUnit));
   setText("nowSummary", period.shortForecast || "—");
-
   const windText = `Wind ${period.windSpeed || "—"} • ${period.windDirection || "—"}`;
   setText("nowMeta", windText);
-
   showCard(nowCard);
 }
 
@@ -163,14 +131,13 @@ function renderNow(period, label) {
 function renderDaily(periods) {
   const daysWrap = document.getElementById("days");
   daysWrap.innerHTML = "";
-
   const daily = periods.filter(p => p.isDaytime).slice(0, 7);
   for (const p of daily) {
     const div = document.createElement("div");
     div.className = "day";
     div.innerHTML = `
       <div class="d-date">${p.name}</div>
-      <div class="d-temp">${formatTemp(p.temperature, p.temperatureUnit)}</div>
+      <div class="d-temp">${formatDualTemp(p.temperature, p.temperatureUnit)}</div>
       <div class="d-meta">${p.shortForecast || "—"}</div>
       <div class="d-meta">💨 ${p.windSpeed || "—"} • ${p.windDirection || "—"}</div>
     `;
@@ -179,7 +146,7 @@ function renderDaily(periods) {
   showCard(dailyCard);
 }
 
-// NOAA Water embed and header text
+// NOAA Water embed
 function loadWaterData(lat, lon, label) {
   const link = `https://water.noaa.gov/?lat=${lat}&lon=${lon}&zoom=9`;
   waterMeta.innerHTML = `
@@ -195,22 +162,46 @@ function setRadar(lat, lon) {
   radarFrame.src = url;
 }
 
-// Simple theme from forecast keyword
+// Theme
 function setTheme(period) {
   const text = (period.shortForecast || "").toLowerCase();
   let accent = "#5dd2ff";
   let surface = "#101722";
   let shadow = "rgba(0,0,0,0.35)";
-
   if (text.includes("sun") || text.includes("clear")) { accent = "#ffd166"; surface = "#111a24"; }
   else if (text.includes("cloud")) { accent = "#8fb0cc"; surface = "#0f1822"; }
   else if (text.includes("rain") || text.includes("showers")) { accent = "#64a8ff"; surface = "#0e1721"; }
   else if (text.includes("snow")) { accent = "#bfe3ff"; surface = "#0e1720"; }
   else if (text.includes("thunder")) { accent = "#c57bff"; surface = "#0e1520"; }
-
   setCSS("--theme-accent", accent);
   setCSS("--theme-surface", surface);
   setCSS("--theme-shadow", shadow);
 }
 
 // Helpers
+function showCard(el) {
+  el.classList.remove("hidden");
+}
+function showError(msg) {
+  locNameEl.textContent = "Error";
+  setText("nowTemp", "--°F\n--°C");
+  setText("nowSummary", msg);
+  setText("nowMeta", "Wind -- • Humidity --%");
+  showCard(nowCard);
+}
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+function setCSS(varName, value) {
+  document.documentElement.style.setProperty(varName, value);
+}
+
+// Dual temperature display
+function formatDualTemp(value, inputUnit) {
+  const v = Number(value);
+  if (!Number.isFinite(v)) return "--°F\n--°C";
+  const f = inputUnit === "C" ? Math.round((v * 9 / 5) + 32) : Math.round(v);
+  const c = inputUnit === "F" ? Math.round((v - 32) * 5 / 9) : Math.round(v);
+  return `${f}°F\n${c}°C`;
+}

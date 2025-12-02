@@ -19,10 +19,6 @@
       <div class="controls">
         <input id="search" type="text" placeholder="Enter city or ZIP (e.g. 43780)" />
         <button id="goBtn" class="btn">Get weather</button>
-        <div class="unit-toggle">
-          <button id="unitF" class="toggle active" data-unit="F">°F</button>
-          <button id="unitC" class="toggle" data-unit="C">°C</button>
-        </div>
       </div>
     </header>
 
@@ -32,12 +28,11 @@
     </nav>
 
     <main id="content">
-      <!-- Weather Tab -->
       <section class="tab-content" id="weatherTab">
         <div id="nowCard" class="card card-hero hidden">
           <div class="hero-left">
             <div class="location" id="locName">Enter a location to begin</div>
-            <div class="temp" id="nowTemp">--°</div>
+            <div class="temp" id="nowTemp">--°F<br>--°C</div>
             <div class="summary" id="nowSummary">No data loaded yet</div>
             <div class="meta" id="nowMeta">Wind -- • Humidity --%</div>
           </div>
@@ -62,7 +57,6 @@
         </section>
       </section>
 
-      <!-- Water Tab -->
       <section class="tab-content hidden" id="waterTab">
         <section class="card" id="waterCard">
           <h2 class="card-title">Water Conditions</h2>
