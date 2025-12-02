@@ -17,7 +17,7 @@
         <span class="brand-text">Storm Surge Weather</span>
       </div>
       <div class="controls">
-        <input id="zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP code (e.g. 43215)" />
+        <input id="search" type="text" placeholder="City or ZIP (e.g. Columbus or 43215)" />
         <button id="goBtn" class="btn">Get weather</button>
       </div>
     </header>
@@ -43,7 +43,7 @@
             </div>
           </div>
           <div class="hero-right">
-            <svg id="icon" viewBox="0 0 64 64" class="weather-icon">
+            <svg id="icon" viewBox="0 0 64 64" class="weather-icon" aria-hidden="true">
               <circle cx="22" cy="22" r="12" class="icon-sun"></circle>
               <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
             </svg>
@@ -64,7 +64,7 @@
       <!-- Water Tab -->
       <section class="tab-content hidden" id="waterTab">
         <section class="card" id="waterCard">
-          <h2 class="card-title">Water Conditions</h2>
+          <h2 class="card-title">Water conditions</h2>
           <div class="meta" id="waterMeta">Loading...</div>
         </section>
         <section class="card" id="radarCard">
@@ -78,14 +78,14 @@
       <!-- Snow Tab -->
       <section class="tab-content hidden" id="snowTab">
         <section class="card" id="snowCard">
-          <h2 class="card-title">Snow Conditions</h2>
+          <h2 class="card-title">Snow conditions</h2>
           <div class="meta" id="snowMeta">Loading...</div>
         </section>
       </section>
     </main>
 
     <footer class="footer">
-      <span>Data: Open‑Meteo (no API key)</span>
+      <span>Data: Open‑Meteo</span>
       <span>Built by Jakob</span>
     </footer>
   </div>
