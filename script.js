@@ -14,7 +14,7 @@ const waterMeta = document.getElementById("waterMeta");
 const waterFrame = document.getElementById("waterFrame");
 
 let lastContext = null;
-const GEOCODIO_KEY = "a21c2a2fa1cf6a93cc912a2c20643a4f293c641";
+const ZIPCODEBASE_KEY = "0d3e1960-cfc1-11f0-88a7-ab5476d59c85";
 
 // Events
 goBtn.addEventListener("click", () => {
@@ -49,17 +49,23 @@ async function resolveLocation(query) {
     let lat, lon, label;
 
     if (/^\d{5}$/.test(query)) {
-      const url = `https://api.geocod.io/v1.7/geocode?q=${query}&api_key=${GEOCODIO_KEY}`;
-      const res = await fetch(url);
+      const url = `https://app.zipcodebase.com/api/v1/search?codes=${query}&country=US`;
+      const res = await fetch(url, {
+        headers: { "apikey": ZIPCODEBASE_KEY }
+      });
       if (!res.ok) throw new Error("ZIP lookup failed.");
       const data = await res.json();
-      if (!data.results?.length) throw new Error("ZIP not found.");
-      const loc = data.results[0].location;
-      lat = loc.lat;
-      lon = loc.lng;
-      label = data.results[0].address_components.city + ", " + data.results[0].address_components.state;
+      if (!data.results || !data.results[query] || !data.results[query].length) {
+        throw new Error("ZIP not found.");
+      }
+      const loc = data.results[query][0];
+      lat = loc.latitude;
+      lon = loc.longitude;
+      label = `${loc.city}, ${loc.state_code}`;
     } else {
-      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`);
+      const geoRes = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`
+      );
       if (!geoRes.ok) throw new Error("City lookup failed.");
       const geo = await geoRes.json();
       if (!geo.results?.length) throw new Error("Location not found.");
@@ -168,11 +174,19 @@ function setTheme(period) {
   let accent = "#5dd2ff";
   let surface = "#101722";
   let shadow = "rgba(0,0,0,0.35)";
-  if (text.includes("sun") || text.includes("clear")) { accent = "#ffd166"; surface = "#111a24"; }
-  else if (text.includes("cloud")) { accent = "#8fb0cc"; surface = "#0f1822"; }
-  else if (text.includes("rain") || text.includes("showers")) { accent = "#64a8ff"; surface = "#0e1721"; }
-  else if (text.includes("snow")) { accent = "#bfe3ff"; surface = "#0e1720"; }
-  else if (text.includes("thunder")) { accent = "#c57bff"; surface = "#0e1520"; }
+
+  if (text.includes("sun") || text.includes("clear")) {
+    accent = "#ffd166"; surface = "#111a24";
+  } else if (text.includes("cloud")) {
+    accent = "#8fb0cc"; surface = "#0f1822";
+  } else if (text.includes("rain") || text.includes("showers")) {
+    accent = "#64a8ff"; surface = "#0e1721";
+  } else if (text.includes("snow")) {
+    accent = "#bfe3ff"; surface = "#0e1720";
+  } else if (text.includes("thunder")) {
+    accent = "#c57bff"; surface = "#0e1520";
+  }
+
   setCSS("--theme-accent", accent);
   setCSS("--theme-surface", surface);
   setCSS("--theme-shadow", shadow);
@@ -182,6 +196,7 @@ function setTheme(period) {
 function showCard(el) {
   el.classList.remove("hidden");
 }
+
 function showError(msg) {
   locNameEl.textContent = "Error";
   setText("nowTemp", "--°F\n--°C");
@@ -189,10 +204,12 @@ function showError(msg) {
   setText("nowMeta", "Wind -- • Humidity --%");
   showCard(nowCard);
 }
+
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
+
 function setCSS(varName, value) {
   document.documentElement.style.setProperty(varName, value);
 }

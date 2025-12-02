@@ -62,6 +62,27 @@ body {
 }
 .controls input::placeholder { color: #7f90a5; }
 
+/* Button redesign */
+.btn-primary {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  color: #061019;
+  background: linear-gradient(135deg, #5dd2ff, #9bffb5);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 150ms ease;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(93,210,255,0.35);
+}
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(93,210,255,0.25);
+}
+
 /* Tabs */
 .tabs {
   display: flex;
