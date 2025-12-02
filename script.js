@@ -1,4 +1,4 @@
-// Storm Surge Weather — NWS + NOAA Water, ZIP & city search, °F/°C toggle, radar embed
+// Storm Surge Weather — NWS + NOAA Water, ZIP & city search, °F/°C toggle, radar embed, live refresh
 
 // Elements
 const searchInput = document.getElementById("search");
@@ -20,7 +20,9 @@ const waterFrame = document.getElementById("waterFrame");
 // State
 let unit = "F"; // "F" or "C"
 let lastContext = null; // { lat, lon, label, periods }
-let isFetching = false;
+
+// Geocodio API key
+const GEOCODIO_KEY = "a21c2a2fa1cf6a93cc912a2c20643a4f293c641";
 
 // Event wiring
 goBtn.addEventListener("click", () => {
@@ -48,6 +50,13 @@ tabs.forEach(tab => {
   });
 });
 
+// Auto-refresh every 5 minutes
+setInterval(() => {
+  if (lastContext?.lat && lastContext?.lon && lastContext?.label) {
+    getNWSForecast(lastContext.lat, lastContext.lon, lastContext.label);
+  }
+}, 5 * 60 * 1000);
+
 // Unit toggle
 function setUnit(next) {
   unit = next;
@@ -59,22 +68,21 @@ function setUnit(next) {
   }
 }
 
-// Location resolution: ZIP via Zippopotam, else city via Open‑Meteo geocoding
+// Location resolution: ZIP via Geocodio, else city via Open‑Meteo geocoding
 async function resolveLocation(query) {
   try {
-    isFetching = true;
-    const zipMatch = /^\d{5}$/.test(query);
     let lat, lon, label;
 
-    if (zipMatch) {
-      const locRes = await fetch(`https://api.zippopotam.us/us/${query}`);
-      if (!locRes.ok) throw new Error("ZIP lookup failed.");
-      const locData = await locRes.json();
-      const place = locData.places?.[0];
-      if (!place) throw new Error("ZIP not found.");
-      lat = parseFloat(place.latitude);
-      lon = parseFloat(place.longitude);
-      label = `${place["place name"]}, ${place["state abbreviation"]}`;
+    if (/^\d{5}$/.test(query)) {
+      const url = `https://api.geocod.io/v1.7/geocode?q=${query}&api_key=${GEOCODIO_KEY}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("ZIP lookup failed.");
+      const data = await res.json();
+      if (!data.results?.length) throw new Error("ZIP not found.");
+      const loc = data.results[0].location;
+      lat = loc.lat;
+      lon = loc.lng;
+      label = data.results[0].address_components.city + ", " + data.results[0].address_components.state;
     } else {
       const geoRes = await fetch(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`
@@ -91,17 +99,12 @@ async function resolveLocation(query) {
     await getNWSForecast(lat, lon, label);
   } catch (err) {
     showError(err.message || "Location lookup failed.");
-  } finally {
-    isFetching = false;
   }
 }
 
 // NWS forecast fetch and render
 async function getNWSForecast(lat, lon, label) {
   try {
-    isFetching = true;
-
-    // NWS points
     const pointsUrl = `https://api.weather.gov/points/${lat},${lon}`;
     const pointRes = await fetch(pointsUrl, {
       headers: {
@@ -115,7 +118,7 @@ async function getNWSForecast(lat, lon, label) {
     const forecastUrl = pointData?.properties?.forecast;
     if (!forecastUrl) throw new Error("No forecast URL for location.");
 
-    // Radar (set early)
+    // Set radar early
     setRadar(lat, lon);
 
     // Forecast
@@ -141,8 +144,6 @@ async function getNWSForecast(lat, lon, label) {
     loadWaterData(lat, lon, label);
   } catch (err) {
     showError(err.message || "Failed to fetch NWS forecast.");
-  } finally {
-    isFetching = false;
   }
 }
 
@@ -213,38 +214,3 @@ function setTheme(period) {
 }
 
 // Helpers
-function showCard(el) {
-  el.classList.remove("hidden");
-  el.classList.add("show");
-}
-
-function showError(msg) {
-  locNameEl.textContent = "Error";
-  setText("nowTemp", "--°");
-  setText("nowSummary", msg);
-  setText("nowMeta", "Wind -- • Humidity --%");
-  showCard(nowCard);
-}
-
-function setText(id, text) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = text;
-}
-
-function setCSS(varName, value) {
-  document.documentElement.style.setProperty(varName, value);
-}
-
-// Temperature formatting with unit toggle
-function formatTemp(value, inputUnit) {
-  const v = Number(value);
-  if (!Number.isFinite(v)) return "—";
-  if (unit === "F") {
-    return `${inputUnit === "C" ? cToF(v) : Math.round(v)}°`;
-  } else {
-    return `${inputUnit === "F" ? fToC(v) : Math.round(v)}°`;
-  }
-}
-
-function fToC(f) { return Math.round((f - 32) * 5 / 9); }
-function cToF(c) { return Math.round((c * 9 / 5) + 32); }
