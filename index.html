@@ -8,8 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <!-- Mapbox script is optional; enable when ready -->
+  <!-- <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" /> -->
 </head>
 <body>
   <div class="app">
@@ -30,7 +31,8 @@
 
     <main class="split">
       <section class="left">
-        <div id="map" class="map"></div>
+        <!-- Map container; hidden when Mapbox is disabled -->
+        <div id="map" class="map hidden"></div>
         <div class="map-actions">
           <button id="locateBtn" class="chip">Center on location</button>
         </div>
@@ -87,15 +89,17 @@
     </main>
 
     <footer class="footer">
-      <span>Data: Mapbox • AmbientWeather • Tomorrow.io • USGS</span>
+      <span>Data: Tomorrow.io • AmbientWeather • USGS</span>
       <span>Built by Jakob • Storm Surge Weather</span>
     </footer>
   </div>
 
   <script>
-    window.SSW_MAPBOX_TOKEN = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2aTlqeTN5OSJ9.QYtnuhdixR4SGxLQldE9PA";
-    window.SSW_AMBIENT_KEY = "9bd8d6804bce40019d1bcb24222f7137668be524a0fe43068035a6e7ecf52401";
     window.SSW_TOMORROW_KEY = "SxfCeG33LbiKBLlR5iEegtxw5aXnZEOr";
+    window.SSW_AMBIENT_KEY = "9bd8d6804bce40019d1bcb24222f7137668be524a0fe43068035a6e7ecf52401";
+    // Set to true once Mapbox is ready and the script/css are included
+    window.SSW_ENABLE_MAP = false;
+    window.SSW_MAPBOX_TOKEN = ""; // add your token when enabling Mapbox
   </script>
   <script src="script.js"></script>
 </body>
