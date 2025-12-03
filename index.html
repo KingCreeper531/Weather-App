@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pixel Weather</title>
+  <title>Storm Surge Weather</title>
   <link rel="stylesheet" href="style.css" />
   <!-- Inter font for sleek UI -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,7 +15,7 @@
     <header class="topbar">
       <div class="brand">
         <div class="logo-dot"></div>
-        <span class="brand-text">Pixel Weather</span>
+        <span class="brand-text">Storm Surge Weather</span>
       </div>
       <div class="controls">
         <input id="zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP code (e.g. 43780)" />
@@ -36,7 +36,6 @@
         </div>
         <div class="hero-right">
           <svg id="icon" viewBox="0 0 64 64" class="weather-icon">
-            <!-- simple sun/cloud icon; replaced dynamically -->
             <circle cx="22" cy="22" r="12" class="icon-sun"></circle>
             <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
           </svg>
@@ -48,15 +47,20 @@
         <div class="hours" id="hours"></div>
       </section>
 
+      <section class="card hidden" id="dailyGrid">
+        <h2 class="card-title">7‑day forecast</h2>
+        <div class="hours" id="days"></div>
+      </section>
+
       <section class="card hidden" id="radarCard">
-        <h2 class="card-title">Radar (regional)</h2>
+        <h2 class="card-title">Radar (RainViewer)</h2>
         <div class="radar-wrap">
-          <!-- Swap to your local WFO radar if desired -->
           <iframe
+            id="radar"
             title="Radar"
-            src="https://radar.weather.gov/ridge/lite/N0R/ILN_loop.gif"
+            src=""
             width="600"
-            height="600"
+            height="420"
             loading="lazy"
           ></iframe>
         </div>
@@ -64,8 +68,8 @@
     </main>
 
     <footer class="footer">
-      <span>Data: Open‑Meteo (no API key; free for non‑commercial use)</span>
-      <span>Built by Jakob</span>
+      <span>Data: Open‑Meteo (no API key; free), RainViewer (embed)</span>
+      <span>Built by Jakob • StormSurgeWeather (contact: stormsurgee025@gmail.com)</span>
     </footer>
   </div>
 

@@ -1,12 +1,16 @@
-// Pixel Weather — Open‑Meteo powered
-// Uses Zippopotam for ZIP -> lat/lon, then Open‑Meteo for current + hourly.
-// Units: Fahrenheit, MPH, inches, timezone=auto.
+// Storm Surge Weather — Open‑Meteo + RainViewer
+// ZIP -> lat/lon via Zippopotam; forecast via Open‑Meteo; radar via RainViewer.
+// Auto-refresh every 10 minutes.
 
 const zipInput = document.getElementById("zip");
 const goBtn = document.getElementById("goBtn");
 const nowCard = document.getElementById("nowCard");
 const todayGrid = document.getElementById("todayGrid");
+const dailyGrid = document.getElementById("dailyGrid");
 const radarCard = document.getElementById("radarCard");
+
+let lastLoc = null;      // { lat, lon, zip }
+let refreshTimer = null; // interval handle
 
 goBtn.addEventListener("click", () => {
   const zip = zipInput.value.trim();
@@ -29,14 +33,38 @@ async function getByZip(zip) {
     const lat = parseFloat(locData.places[0].latitude);
     const lon = parseFloat(locData.places[0].longitude);
 
-    await loadWeather(lat, lon);
+    lastLoc = { lat, lon, zip };
+    await loadAll(lat, lon);
+
+    // Set up auto refresh every 10 minutes
+    setupAutoRefresh();
   } catch (err) {
     showError(err.message);
   }
 }
 
+function setupAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(async () => {
+    if (!lastLoc) return;
+    await loadAll(lastLoc.lat, lastLoc.lon);
+  }, 10 * 60 * 1000);
+}
+
+async function loadAll(lat, lon) {
+  await Promise.all([
+    loadWeather(lat, lon),
+    loadRadar(lat, lon)
+  ]);
+
+  // Animate cards in
+  showCard(nowCard);
+  showCard(todayGrid);
+  showCard(dailyGrid);
+  showCard(radarCard);
+}
+
 async function loadWeather(lat, lon) {
-  // Open‑Meteo forecast endpoint
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", lat);
   url.searchParams.set("longitude", lon);
@@ -46,14 +74,21 @@ async function loadWeather(lat, lon) {
     "wind_speed_10m",
     "apparent_temperature",
     "precipitation",
-    "weather_code"
+    "weather_code",
+    "time"
   ].join(","));
   url.searchParams.set("hourly", [
     "temperature_2m",
     "relative_humidity_2m",
     "wind_speed_10m",
     "precipitation",
-    "weather_code"
+    "weather_code",
+    "time"
+  ].join(","));
+  url.searchParams.set("daily", [
+    "weather_code",
+    "temperature_2m_max",
+    "temperature_2m_min"
   ].join(","));
   url.searchParams.set("temperature_unit", "fahrenheit");
   url.searchParams.set("wind_speed_unit", "mph");
@@ -66,11 +101,7 @@ async function loadWeather(lat, lon) {
 
   renderNow(data);
   renderHours(data);
-
-  // Animate cards in
-  showCard(nowCard);
-  showCard(todayGrid);
-  showCard(radarCard);
+  renderDaily(data);
 }
 
 function renderNow(data) {
@@ -86,7 +117,6 @@ function renderNow(data) {
   document.getElementById("nowHum").textContent = `Humidity ${hum}%`;
   document.getElementById("nowSummary").textContent = codeToSummary(c.weather_code);
 
-  // Update hero icon style based on code
   setIconTheme(c.weather_code);
 }
 
@@ -100,7 +130,6 @@ function renderHours(data) {
 
   const nowISO = data.current.time;
   const nowIdx = times.indexOf(nowISO);
-  // show next ~8 hours
   const sliceStart = Math.max(nowIdx, 0);
   const sliceEnd = Math.min(sliceStart + 8, times.length);
 
@@ -126,6 +155,40 @@ function renderHours(data) {
     `;
     hoursWrap.appendChild(div);
   }
+}
+
+function renderDaily(data) {
+  const daysWrap = document.getElementById("days");
+  daysWrap.innerHTML = "";
+
+  const times = data.daily.time;
+  const tmax = data.daily.temperature_2m_max;
+  const tmin = data.daily.temperature_2m_min;
+  const codes = data.daily.weather_code;
+
+  for (let i = 0; i < times.length && i < 7; i++) {
+    const d = new Date(times[i]);
+    const label = d.toLocaleDateString([], { weekday: "short" });
+    const hi = Math.round(tmax[i]);
+    const lo = Math.round(tmin[i]);
+    const code = codes[i];
+
+    const div = document.createElement("div");
+    div.className = "hour"; // reuse card style
+    div.innerHTML = `
+      <div class="h-time">${label}</div>
+      <div class="h-temp">${hi}° / ${lo}°</div>
+      <div class="h-meta">${codeToEmoji(code)} ${codeToSummary(code)}</div>
+    `;
+    daysWrap.appendChild(div);
+  }
+}
+
+async function loadRadar(lat, lon) {
+  // RainViewer live radar centered on lat/lon; z=7 is a good regional zoom
+  const url = `https://www.rainviewer.com/weather-radar-map-live.html?x=${lon}&y=${lat}&z=7`;
+  const iframe = document.getElementById("radar");
+  iframe.src = url;
 }
 
 function showCard(el) {
@@ -186,7 +249,9 @@ function setIconTheme(code) {
   const cloud = document.querySelector(".icon-cloud");
   if (!sun || !cloud) return;
 
-  // Basic visual emphasis depending on weather code
+  sun.style.filter = "";
+  cloud.style.filter = "";
+
   if ([0,1].includes(code)) {
     sun.style.opacity = "1";
     cloud.style.opacity = "0.15";

@@ -110,7 +110,7 @@ main { margin-top: 16px; }
 .icon-sun { fill: #ffd166; filter: drop-shadow(0 0 10px rgba(255,209,102,0.35)); }
 .icon-cloud { fill: #9bb7d9; opacity: 0.85; filter: drop-shadow(0 6px 16px rgba(155,183,217,0.25)); }
 
-/* Hour grid */
+/* Hour grid (used for hourly + daily forecast) */
 .hours {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -136,6 +136,11 @@ main { margin-top: 16px; }
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--border);
+}
+.radar-wrap iframe {
+  width: 100%;
+  height: 420px;
+  border: none;
 }
 
 /* Footer */
