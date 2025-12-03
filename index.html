@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Storm Surge Weather</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- Inter font for sleek UI -->
+  <!-- Inter font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -20,8 +20,12 @@
       <div class="controls">
         <input id="zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP code (e.g. 43780)" />
         <button id="goBtn" class="btn">Get weather</button>
+        <button id="unitToggle" class="chip">°F / °C</button>
+        <button id="refreshBtn" class="chip">Refresh now</button>
       </div>
     </header>
+
+    <div id="offlineBanner" class="offline-banner hidden"></div>
 
     <main id="content">
       <section id="nowCard" class="card card-hero hidden">
@@ -40,35 +44,52 @@
             <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
           </svg>
         </div>
+        <div class="updated muted" id="updated-now"></div>
       </section>
 
       <section class="card hidden" id="todayGrid">
         <h2 class="card-title">Rest of today</h2>
         <div class="hours" id="hours"></div>
+        <div class="updated muted" id="updated-today"></div>
       </section>
 
       <section class="card hidden" id="dailyGrid">
         <h2 class="card-title">7‑day forecast</h2>
         <div class="hours" id="days"></div>
+        <div class="updated muted" id="updated-daily"></div>
+      </section>
+
+      <section class="card hidden" id="alertsCard">
+        <h2 class="card-title">NWS alerts</h2>
+        <div id="alerts" class="alerts"></div>
+        <div class="updated muted" id="updated-alerts"></div>
       </section>
 
       <section class="card hidden" id="radarCard">
-        <h2 class="card-title">Radar (RainViewer)</h2>
-        <div class="radar-wrap">
-          <iframe
-            id="radar"
-            title="Radar"
-            src=""
-            width="600"
-            height="420"
-            loading="lazy"
-          ></iframe>
+        <div class="card-head-row">
+          <h2 class="card-title">Radar (RainViewer)</h2>
+          <div class="actions">
+            <button id="openRadar" class="chip">Open full radar</button>
+          </div>
         </div>
+        <div class="radar-wrap">
+          <iframe id="radar" title="Radar" src="" loading="lazy"></iframe>
+        </div>
+        <div class="updated muted" id="updated-radar"></div>
+      </section>
+
+      <section class="card hidden" id="waterCard">
+        <h2 class="card-title">Nearby rivers (USGS)</h2>
+        <div class="water-body">
+          <div id="water-status" class="muted">Loading…</div>
+          <div id="gauges" class="gauges"></div>
+        </div>
+        <div class="updated muted" id="updated-water"></div>
       </section>
     </main>
 
     <footer class="footer">
-      <span>Data: Open‑Meteo (no API key; free), RainViewer (embed)</span>
+      <span>Data: NWS api.weather.gov • RainViewer • USGS Water Services</span>
       <span>Built by Jakob • StormSurgeWeather (contact: stormsurgee025@gmail.com)</span>
     </footer>
   </div>
