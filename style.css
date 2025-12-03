@@ -1,3 +1,9 @@
+/* ========================================
+     CSS STARTS HERE
+     File: style.css
+     Storm Surge Weather Dashboard
+======================================== */
+
 /* ============================
    GLOBAL STYLES
 ============================ */
@@ -32,6 +38,33 @@ html, body {
     height: 100%;
     z-index: 1;
     cursor: crosshair;
+}
+
+/* ============================
+   BRANDING
+============================ */
+.branding {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    text-align: right;
+    pointer-events: none;
+}
+
+.branding h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #00aaff;
+    text-shadow: 0 2px 10px rgba(0, 170, 255, 0.5);
+    margin-bottom: 4px;
+}
+
+.branding p {
+    font-size: 0.9rem;
+    color: #00ff88;
+    font-weight: 500;
+    text-shadow: 0 1px 5px rgba(0, 255, 136, 0.5);
 }
 
 /* ============================
@@ -436,7 +469,7 @@ html, body {
 ============================ */
 .radar-controls {
     position: absolute;
-    bottom: 100px;
+    bottom: 120px;
     left: 20px;
     background: rgba(40, 40, 50, 0.95);
     backdrop-filter: blur(10px);
@@ -582,11 +615,24 @@ html, body {
     }
     
     .radar-controls {
-        bottom: 120px;
+        bottom: 140px;
     }
     
     .radar-legend {
+        bottom: 80px;
+    }
+    
+    .branding {
         bottom: 10px;
+        right: 10px;
+    }
+    
+    .branding h1 {
+        font-size: 1.5rem;
+    }
+    
+    .branding p {
+        font-size: 0.75rem;
     }
 }
 
@@ -619,3 +665,7 @@ html, body {
 .search-results::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 170, 255, 0.7);
 }
+
+/* ========================================
+     CSS ENDS HERE
+======================================== */

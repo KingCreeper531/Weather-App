@@ -1,13 +1,18 @@
+// ========================================
+//  JAVASCRIPT STARTS HERE
+//  File: script.js
+//  Storm Surge Weather Dashboard
+// ========================================
+
 // ================================
 //  API KEYS & CONFIG
 // ================================
-const TOMORROW_API = "SxfCeG33LbiKBLlR5iEegtxw5aXnZEOr";
 const MAPBOX_KEY = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2aTlqeTN5OSJ9.QYtnuhdixR4SGxLQldE9PA";
 
 // Current state
 let currentLat = 39.8283;
 let currentLng = -98.5795; // Center of US
-let currentRadarType = 'precipitationIntensity';
+let currentRadarType = 'nexrad-base';
 
 // Animation state
 let isAnimating = true;
@@ -73,8 +78,16 @@ function updateRadarLayer(radarType, timeIndex = 11) {
         generateRadarTimes();
     }
     
-    const timestamp = timeIndex === 11 ? 'now' : radarTimes[timeIndex].toISOString();
-    const tileURL = `https://api.tomorrow.io/v4/map/tile/{z}/{x}/{y}/${radarType}/${timestamp}.png?apikey=${TOMORROW_API}`;
+    // Use RainViewer's free NEXRAD radar tiles
+    let tileURL;
+    if (timeIndex === 11) {
+        // Current/live radar
+        tileURL = `https://tilecache.rainviewer.com/v2/radar/0/256/{z}/{x}/{y}/6/1_1.png`;
+    } else {
+        // Historical radar - use timestamp
+        const timestamp = Math.floor(radarTimes[timeIndex].getTime() / 1000);
+        tileURL = `https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/6/1_1.png`;
+    }
 
     if (map.getSource(RADAR_SOURCE)) {
         map.getSource(RADAR_SOURCE).setTiles([tileURL]);
@@ -149,46 +162,36 @@ function updateLegend(radarType) {
     const legendScale = document.querySelector('.legend-scale');
     
     const legends = {
-        precipitationIntensity: {
-            title: 'Precipitation Intensity',
+        'nexrad-base': {
+            title: 'NEXRAD Reflectivity (dBZ)',
+            scale: [
+                { color: '#00ff00', label: 'Light (20-30)' },
+                { color: '#ffff00', label: 'Moderate (30-40)' },
+                { color: '#ff8000', label: 'Heavy (40-50)' },
+                { color: '#ff0000', label: 'Severe (50+)' }
+            ]
+        },
+        'nexrad-composite': {
+            title: 'Composite Reflectivity',
             scale: [
                 { color: '#00ff00', label: 'Light' },
                 { color: '#ffff00', label: 'Moderate' },
                 { color: '#ff8000', label: 'Heavy' },
-                { color: '#ff0000', label: 'Intense' }
-            ]
-        },
-        temperature: {
-            title: 'Temperature',
-            scale: [
-                { color: '#0000ff', label: 'Cold' },
-                { color: '#00ffff', label: 'Cool' },
-                { color: '#00ff00', label: 'Mild' },
-                { color: '#ffff00', label: 'Warm' },
-                { color: '#ff0000', label: 'Hot' }
-            ]
-        },
-        windSpeed: {
-            title: 'Wind Speed',
-            scale: [
-                { color: '#00ff00', label: 'Light' },
-                { color: '#ffff00', label: 'Moderate' },
-                { color: '#ff8000', label: 'Strong' },
                 { color: '#ff0000', label: 'Severe' }
             ]
         },
-        cloudCover: {
-            title: 'Cloud Cover',
+        'nexrad-velocity': {
+            title: 'Storm Velocity',
             scale: [
-                { color: '#ffffff', label: 'Clear' },
-                { color: '#cccccc', label: 'Partly' },
-                { color: '#888888', label: 'Mostly' },
-                { color: '#444444', label: 'Overcast' }
+                { color: '#00ff00', label: 'Approaching' },
+                { color: '#ffff00', label: 'Moderate' },
+                { color: '#ff8000', label: 'Fast' },
+                { color: '#ff0000', label: 'Very Fast' }
             ]
         }
     };
 
-    const legend = legends[radarType];
+    const legend = legends[radarType] || legends['nexrad-base'];
     legendTitle.textContent = legend.title;
     
     legendScale.innerHTML = legend.scale.map(item => 
@@ -245,14 +248,14 @@ function hideSearchResults() {
 // ================================
 async function getWeatherData(lat, lng) {
     try {
-        // Current weather
-        const currentUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`;
+        // Current weather - FORCE Fahrenheit with temperature_unit=fahrenheit
+        const currentUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`;
         
-        // Hourly forecast
-        const hourlyUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,showers,snowfall,weather_code,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,uv_index&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=2`;
+        // Hourly forecast - FORCE Fahrenheit
+        const hourlyUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,showers,snowfall,weather_code,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,uv_index&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=2`;
         
-        // Daily forecast
-        const dailyUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,daylight_duration,sunshine_duration,uv_index_max,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=7`;
+        // Daily forecast - FORCE Fahrenheit
+        const dailyUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,daylight_duration,sunshine_duration,uv_index_max,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=7`;
         
         const [currentRes, hourlyRes, dailyRes] = await Promise.all([
             fetch(currentUrl),
@@ -297,12 +300,18 @@ function getWindDirection(degrees) {
     return directions[Math.round(degrees / 22.5) % 16];
 }
 
-function calculateDewPoint(temp, humidity) {
+function calculateDewPoint(tempF, humidity) {
+    // Convert F to C for calculation
+    const tempC = (tempF - 32) * 5/9;
+    
     // Magnus formula approximation
     const a = 17.27;
     const b = 237.7;
-    const alpha = ((a * temp) / (b + temp)) + Math.log(humidity / 100);
-    return (b * alpha) / (a - alpha);
+    const alpha = ((a * tempC) / (b + tempC)) + Math.log(humidity / 100);
+    const dewPointC = (b * alpha) / (a - alpha);
+    
+    // Convert back to F
+    return (dewPointC * 9/5) + 32;
 }
 
 async function updateWeatherPanel(lat, lng) {
@@ -317,11 +326,11 @@ async function updateWeatherPanel(lat, lng) {
     
     // Update location info
     const locationName = await reverseGeocode(lat, lng);
-    document.getElementById('locationName').textContent = 'Weather Information';
+    document.getElementById('locationName').textContent = 'Storm Surge Weather';
     document.getElementById('locationAddress').textContent = locationName;
     document.getElementById('locationCoords').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     
-    // Update current weather
+    // Update current weather - temperatures are already in Fahrenheit
     document.getElementById('currentTemp').textContent = `${Math.round(current.temperature_2m)}°F`;
     document.getElementById('feelsLike').textContent = `Feels like ${Math.round(current.apparent_temperature)}°F`;
     document.getElementById('conditions').textContent = weatherText[current.weather_code] || 'Unknown';
@@ -334,17 +343,15 @@ async function updateWeatherPanel(lat, lng) {
     document.getElementById('windSpeed').textContent = `${Math.round(current.wind_speed_10m)} mph`;
     document.getElementById('windDirection').textContent = getWindDirection(current.wind_direction_10m);
     document.getElementById('pressure').textContent = `${Math.round(current.pressure_msl)} mb`;
-    document.getElementById('visibility').textContent = `10+ mi`; // Open-Meteo doesn't provide visibility in current
-    document.getElementById('uvIndex').textContent = '--'; // Not available in current weather
+    document.getElementById('visibility').textContent = `10+ mi`;
+    document.getElementById('uvIndex').textContent = '--';
     document.getElementById('dewPoint').textContent = `${Math.round(dewPoint)}°F`;
     document.getElementById('cloudCover').textContent = `${current.cloud_cover}%`;
     
     // Update hourly forecast (next 24 hours)
     const hourlyContainer = document.getElementById('hourlyData');
-    const now = new Date();
-    const currentHour = now.getHours();
-    
     hourlyContainer.innerHTML = '';
+    
     for (let i = 0; i < 24; i++) {
         const hourIndex = i;
         if (weatherData.hourly.time[hourIndex]) {
@@ -355,7 +362,7 @@ async function updateWeatherPanel(lat, lng) {
             hourlyItem.className = 'hourly-item';
             hourlyItem.innerHTML = `
                 <div class="hourly-time">${timeStr}</div>
-                <div class="hourly-temp">${Math.round(weatherData.hourly.temperature_2m[hourIndex])}°</div>
+                <div class="hourly-temp">${Math.round(weatherData.hourly.temperature_2m[hourIndex])}°F</div>
                 <div class="hourly-condition">${(weatherText[weatherData.hourly.weather_code[hourIndex]] || 'N/A').substring(0, 8)}</div>
             `;
             hourlyContainer.appendChild(hourlyItem);
@@ -375,7 +382,7 @@ async function updateWeatherPanel(lat, lng) {
             dailyItem.className = 'daily-item';
             dailyItem.innerHTML = `
                 <div class="daily-date">${dateStr}</div>
-                <div class="daily-temps">${Math.round(weatherData.daily.temperature_2m_max[i])}° / ${Math.round(weatherData.daily.temperature_2m_min[i])}°</div>
+                <div class="daily-temps">${Math.round(weatherData.daily.temperature_2m_max[i])}°F / ${Math.round(weatherData.daily.temperature_2m_min[i])}°F</div>
             `;
             dailyContainer.appendChild(dailyItem);
         }
@@ -527,7 +534,11 @@ document.getElementById('closePanel').addEventListener('click', hideWeatherPanel
 //  INITIALIZATION
 // ================================
 
-console.log('Weather Dashboard initialized successfully!');
+console.log('Storm Surge Weather Dashboard initialized successfully!');
 console.log('Weather data: Open-Meteo API (free, no API key required)');
-console.log('Radar data: Tomorrow.io API');
+console.log('Radar data: RainViewer NEXRAD Data');
 console.log('Click anywhere on the map to get weather information for that location.');
+
+// ========================================
+//  JAVASCRIPT ENDS HERE
+// ========================================

@@ -1,8 +1,13 @@
+<!-- ========================================
+     HTML STARTS HERE
+     File: index.html
+     Storm Surge Weather Dashboard
+======================================== -->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Weather Dashboard — Open-Meteo + Tomorrow.io Radar</title>
+  <title>Storm Surge Weather — Real-Time NEXRAD Radar</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   
@@ -62,7 +67,7 @@
   <!-- Weather Info Panel -->
   <div id="weatherPanel" class="weather-panel hidden">
     <div class="panel-header">
-      <h3 id="locationName">Weather Information</h3>
+      <h3 id="locationName">Storm Surge Weather</h3>
       <button id="closePanel" class="close-btn">×</button>
     </div>
     
@@ -138,10 +143,9 @@
     <div class="control-group">
       <label>Radar Type:</label>
       <select id="radarType">
-        <option value="precipitationIntensity">Precipitation</option>
-        <option value="temperature">Temperature</option>
-        <option value="windSpeed">Wind Speed</option>
-        <option value="cloudCover">Cloud Cover</option>
+        <option value="nexrad-base">Base Reflectivity</option>
+        <option value="nexrad-composite">Composite</option>
+        <option value="nexrad-velocity">Velocity</option>
       </select>
     </div>
     
@@ -154,29 +158,35 @@
 
   <!-- Legend -->
   <div class="radar-legend">
-    <div class="legend-title">Precipitation Intensity</div>
+    <div class="legend-title">NEXRAD Reflectivity (dBZ)</div>
     <div class="legend-scale">
       <div class="legend-item">
         <div class="legend-color" style="background: #00ff00;"></div>
-        <span>Light</span>
+        <span>Light (20-30)</span>
       </div>
       <div class="legend-item">
         <div class="legend-color" style="background: #ffff00;"></div>
-        <span>Moderate</span>
+        <span>Moderate (30-40)</span>
       </div>
       <div class="legend-item">
         <div class="legend-color" style="background: #ff8000;"></div>
-        <span>Heavy</span>
+        <span>Heavy (40-50)</span>
       </div>
       <div class="legend-item">
         <div class="legend-color" style="background: #ff0000;"></div>
-        <span>Intense</span>
+        <span>Severe (50+)</span>
       </div>
     </div>
   </div>
 
   <!-- Click Marker -->
   <div id="clickMarker" class="click-marker hidden">📍</div>
+
+  <!-- Branding -->
+  <div class="branding">
+    <h1>Storm Surge</h1>
+    <p>Real-Time Weather Radar</p>
+  </div>
 </div>
 
 <!-- Local JavaScript -->
@@ -184,3 +194,6 @@
 
 </body>
 </html>
+<!-- ======================================== 
+     HTML ENDS HERE
+======================================== -->
