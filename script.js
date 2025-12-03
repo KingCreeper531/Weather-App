@@ -1,4 +1,4 @@
-// Storm Surge Weather — Mapbox + AmbientWeather + Open-Meteo + NWS + USGS
+// Storm Surge Weather — Mapbox + AmbientWeather + Open-Meteo + NWS + USGS (no mPING)
 
 const MAPBOX_TOKEN = window.SSW_MAPBOX_TOKEN;
 const AMBIENT_API_KEY = window.SSW_AMBIENT_KEY;
@@ -29,6 +29,9 @@ let unitPrimary = localStorage.getItem("ssw-unit") || "F";
 let lastLoc = JSON.parse(localStorage.getItem("ssw-last-loc") || "null");
 let refreshTimer = null;
 let lastTemps = { f: null, c: null };
+
+// Optional: radar frames (RainViewer-style). Uncomment if you want animation.
+// addRadarLayer(); // see function at bottom
 
 // Handlers
 goBtn.addEventListener("click", () => {
@@ -62,6 +65,9 @@ window.addEventListener("DOMContentLoaded", () => {
     });
     loadAll(lastLoc.lat, lastLoc.lon);
     setupAutoRefresh();
+  } else {
+    // Initial AmbientWeather overlay even before search (use your devices)
+    loadAmbientStations();
   }
 });
 
@@ -196,7 +202,7 @@ function renderHoursOM(data) {
     const prec = precs[i];
     const code = codes[i];
 
-        const div = document.createElement("div");
+    const div = document.createElement("div");
     div.className = "hour";
     div.innerHTML = `
       <div class="h-time">${label}</div>
@@ -235,26 +241,91 @@ function renderDailyOM(data) {
   }
 }
 
-/* USGS helpers */
-function extractSitesFromJson(json) {
-  const arr = json?.value?.site ?? [];
-  return arr.map(s => s?.siteCode?.[0]?.value).filter(Boolean);
+/* NWS alerts */
+async function loadAlerts(lat, lon) {
+  try {
+    const pointsRes = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
+    if (!pointsRes.ok) throw new Error("points failed");
+    const points = await pointsRes.json();
+    const zoneId = points?.properties?.forecastZone?.split("/").pop();
+    if (!zoneId) throw new Error("no zone");
+
+    const alRes = await fetch(`https://api.weather.gov/alerts/active?zone=${zoneId}`);
+    if (!alRes.ok) throw new Error("alerts failed");
+    const alerts = await alRes.json();
+    const features = alerts?.features || [];
+
+    const html = features.slice(0, 4).map(a => {
+      const p = a.properties || {};
+      const title = p.event || "Alert";
+      const severity = (p.severity || "").toLowerCase();
+      const area = (p.areaDesc || "").split(";").slice(0,1).join("");
+      const cls =
+        severity === "severe" ? "alert-severe" :
+        severity === "moderate" ? "alert-moderate" :
+        "alert-minor";
+      return `<div class="alert-banner ${cls}"><strong>${title}</strong> — ${p.severity || "—"}${area ? ` • ${area}` : ""}</div>`;
+    }).join("");
+
+    document.getElementById("alerts").innerHTML = html || `<div class="muted">No active alerts.</div>`;
+    setUpdated("updated-alerts");
+  } catch (e) {
+    document.getElementById("alerts").innerHTML = `<div class="muted">Alerts unavailable.</div>`;
+    showOffline("⚠️ Alerts unavailable");
+  }
 }
-function parseUSGSInstant(json) {
-  const ts = json?.value?.timeSeries ?? [];
-  let name = null, flow = null, stage = null, trend = null;
-  if (ts[0]?.sourceInfo?.siteName) name = ts[0].sourceInfo.siteName;
-  const flowSeries = ts.find(s => s.variable?.variableCode?.[0]?.value === "00060");
-  const stageSeries = ts.find(s => s.variable?.variableCode?.[0]?.value === "00065");
-  const flowVals = (flowSeries?.values?.[0]?.value ?? []).slice(-3).map(v => parseFloat(v?.value));
-  const stageVals = (stageSeries?.values?.[0]?.value ?? []).slice(-3).map(v => parseFloat(v?.value));
-  flow = Number.isFinite(flowVals.slice(-1)[0]) ? flowVals.slice(-1)[0] : null;
-  stage = Number.isFinite(stageVals.slice(-1)[0]) ? stageVals.slice(-1)[0] : null;
-  const delta = (Number.isFinite(stageVals[0]) && Number.isFinite(stageVals.slice(-1)[0]))
-    ? stageVals.slice(-1)[0] - stageVals[0]
-    : null;
-  trend = delta != null ? (delta > 0.02 ? "up" : delta < -0.02 ? "down" : "steady") : null;
-  return { name, flow, stage, trend };
+
+/* USGS water gauges */
+async function loadWater(lat, lon) {
+  try {
+    const status = document.getElementById("water-status");
+    status.textContent = "Finding nearby gauges…";
+
+    const siteUrl = `https://waterservices.usgs.gov/nwis/site/?format=json&lat=${lat}&lon=${lon}&radius=40&siteType=ST&hasDataTypeCd=iv`;
+    const siteRes = await fetch(siteUrl);
+    if (!siteRes.ok) throw new Error("site search failed");
+    const sitesJson = await siteRes.json();
+    const siteArr = extractSitesFromJson(sitesJson);
+    const topSites = siteArr.slice(0, 4);
+
+    const gaugesEl = document.getElementById("gauges");
+    gaugesEl.innerHTML = "";
+
+    if (topSites.length === 0) {
+      status.textContent = "No nearby river gauges found.";
+      setUpdated("updated-water");
+      return;
+    }
+
+    status.textContent = `Showing ${topSites.length} nearby gauges`;
+
+    for (const site of topSites) {
+      const ivUrl = `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${site}&parameterCd=00060,00065&siteStatus=active`;
+      const ivRes = await fetch(ivUrl);
+      if (!ivRes.ok) continue;
+      const ivJson = await ivRes.json();
+      const { name, flow, stage, trend } = parseUSGSInstant(ivJson);
+
+      const card = document.createElement("div");
+      card.className = "gauge-card";
+      card.innerHTML = `
+        <div class="gauge-title">${name || site}</div>
+        <div class="gauge-values">
+          <span class="badge flow">Flow: ${flow != null ? `${Math.round(flow)} cfs` : "—"}</span>
+          <span class="badge stage">Stage: ${stage != null ? `${stage.toFixed(2)} ft` : "—"}</span>
+          <span class="badge ${trend === "up" ? "trend-up" : trend === "down" ? "trend-down" : ""}">
+            ${trend ? `Trend: ${trend}` : ""}
+          </span>
+        </div>
+      `;
+      gaugesEl.appendChild(card);
+    }
+
+    setUpdated("updated-water");
+  } catch (e) {
+    document.getElementById("water-status").textContent = "Error loading gauges.";
+    showOffline("⚠️ River gauges unavailable");
+  }
 }
 
 /* AmbientWeather integration */
@@ -270,12 +341,12 @@ async function loadAmbientStations() {
       geometry: { type: "Point", coordinates: [st.info.lon, st.info.lat] },
       properties: {
         name: st.info.name || st.macAddress,
-        temp: st.lastData.tempf,
-        rain: st.lastData.hourlyrainin,
-        wind: st.lastData.windspeedmph,
-        humidity: st.lastData.humidity
+        temp: st.lastData?.tempf,
+        rain: st.lastData?.hourlyrainin,
+        wind: st.lastData?.windspeedmph,
+        humidity: st.lastData?.humidity
       }
-    }));
+    })).filter(f => Number.isFinite(f.geometry.coordinates[0]) && Number.isFinite(f.geometry.coordinates[1]));
 
     const geojson = { type: "FeatureCollection", features };
 
@@ -292,7 +363,7 @@ async function loadAmbientStations() {
           "circle-color": [
             "interpolate",
             ["linear"],
-            ["get", "rain"],
+            ["coalesce", ["get", "rain"], 0],
             0, "#9bffb5",
             0.1, "#00c853",
             0.5, "#2196f3",
@@ -309,11 +380,11 @@ async function loadAmbientStations() {
         new mapboxgl.Popup()
           .setLngLat(e.lngLat)
           .setHTML(`
-            <strong>${p.name}</strong><br>
-            🌡️ Temp: ${p.temp}°F<br>
-            💧 Rain: ${p.rain} in/hr<br>
-            💨 Wind: ${p.wind} mph<br>
-            Humidity: ${p.humidity}%
+            <strong>${p.name || "Station"}</strong><br>
+            🌡️ Temp: ${p.temp ?? "—"} °F<br>
+            💧 Rain: ${p.rain ?? 0} in/hr<br>
+            💨 Wind: ${p.wind ?? "—"} mph<br>
+            Humidity: ${p.humidity ?? "—"}%
           `)
           .addTo(map);
       });
@@ -323,7 +394,7 @@ async function loadAmbientStations() {
   }
 }
 
-/* UI helpers */
+/* Helpers */
 function addCenterMarker(lat, lon) {
   if (map.getSource("center-point")) {
     map.removeLayer("center-point-layer");
@@ -383,7 +454,6 @@ function codeToEmoji(code) {
   if ([95,96,99].includes(code)) return "⛈️";
   return "🌡️";
 }
-
 function setIconTheme(code) {
   const sun = document.querySelector(".icon-sun");
   const cloud = document.querySelector(".icon-cloud");
@@ -410,3 +480,62 @@ function setIconTheme(code) {
 /* Conversions */
 function cToF(c) { return (c * 9) / 5 + 32; }
 function fToC(f) { return (f - 32) * 5 / 9; }
+
+/* USGS helpers */
+function extractSitesFromJson(json) {
+  const arr = json?.value?.site ?? [];
+  return arr.map(s => s?.siteCode?.[0]?.value).filter(Boolean);
+}
+function parseUSGSInstant(json) {
+  const ts = json?.value?.timeSeries ?? [];
+  let name = null, flow = null, stage = null, trend = null;
+  if (ts[0]?.sourceInfo?.siteName) name = ts[0].sourceInfo.siteName;
+  const flowSeries = ts.find(s => s.variable?.variableCode?.[0]?.value === "00060");
+  const stageSeries = ts.find(s => s.variable?.variableCode?.[0]?.value === "00065");
+  const flowVals = (flowSeries?.values?.[0]?.value ?? []).slice(-3).map(v => parseFloat(v?.value));
+  const stageVals = (stageSeries?.values?.[0]?.value ?? []).slice(-3).map(v => parseFloat(v?.value));
+  flow = Number.isFinite(flowVals.slice(-1)[0]) ? flowVals.slice(-1)[0] : null;
+  stage = Number.isFinite(stageVals.slice(-1)[0]) ? stageVals.slice(-1)[0] : null;
+  const delta = (Number.isFinite(stageVals[0]) && Number.isFinite(stageVals.slice(-1)[0]))
+    ? stageVals.slice(-1)[0] - stageVals[0]
+    : null;
+  trend = delta != null ? (delta > 0.02 ? "up" : delta < -0.02 ? "down" : "steady") : null;
+  return { name, flow, stage, trend };
+}
+
+/* Optional: simple radar layer (RainViewer tile cache)
+   If you want a live radar loop like XtremeWX, we can add a timestamp fetch and animate frames.
+   This static layer shows the latest composite; animation can be added on request. */
+async function addRadarLayer() {
+  try {
+    // Latest radar composite timestamp (example static; replace with a fetch to their timestamps API if available)
+    const timestamp = "latest"; // or e.g. 1699999999 provided by a frames list
+    const sourceId = "radar";
+    const layerId = "radar-layer";
+
+    const template = `https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`;
+
+    if (map.getSource(sourceId)) {
+      map.removeLayer(layerId);
+      map.removeSource(sourceId);
+    }
+
+    map.addSource(sourceId, {
+      type: "raster",
+      tiles: [template],
+      tileSize: 256
+    });
+
+    map.addLayer({
+      id: layerId,
+      type: "raster",
+      source: sourceId,
+      paint: {
+        "raster-opacity": 0.7
+      }
+    }, // place below labels
+    "road-label");
+  } catch (e) {
+    showOffline("⚠️ Radar layer unavailable");
+  }
+}
