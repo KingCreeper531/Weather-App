@@ -841,4 +841,4 @@ console.log('Click anywhere on the map to get weather information for that locat
 
 // ========================================
 //  JAVASCRIPT ENDS HERE
-// ========================================
+// ========================================  
