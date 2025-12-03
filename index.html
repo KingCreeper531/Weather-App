@@ -33,7 +33,13 @@
         <div id="map" class="map"></div>
         <div class="map-actions">
           <button id="locateBtn" class="chip">Center on location</button>
-          <button id="toggleMping" class="chip">mPING: Off</button>
+        </div>
+        <div class="legend">
+          <span style="background:#9bffb5"></span> No rain
+          <span style="background:#00c853"></span> Light
+          <span style="background:#2196f3"></span> Moderate
+          <span style="background:#ff9800"></span> Heavy
+          <span style="background:#f44336"></span> Very heavy
         </div>
       </section>
 
@@ -87,15 +93,14 @@
     </main>
 
     <footer class="footer">
-      <span>Data: Mapbox • Open‑Meteo • NWS • USGS • mPING (optional)</span>
+      <span>Data: Mapbox • AmbientWeather • Open‑Meteo • NWS • USGS</span>
       <span>Built by Jakob • Storm Surge Weather</span>
     </footer>
   </div>
 
   <script>
     window.SSW_MAPBOX_TOKEN = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2aTlqeTN5OSJ9.QYtnuhdixR4SGxLQldE9PA";
-    // Optional mPING API key: set to string or leave null for disabled
-    window.SSW_MPING_TOKEN = null; // e.g., "YOUR_MPING_API_TOKEN"
+    window.SSW_AMBIENT_KEY = "9bd8d6804bce40019d1bcb24222f7137668be524a0fe43068035a6e7ecf52401";
   </script>
   <script src="script.js"></script>
 </body>

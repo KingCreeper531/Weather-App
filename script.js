@@ -1,10 +1,16 @@
-// Storm Surge Weather — Mapbox left panel + right info
-// Open-Meteo forecast, NWS alerts, USGS gauges, optional mPING overlays
-// ZIP or city input, unit toggle, last location memory, auto-refresh, timestamps, offline banner
+// Storm Surge Weather — Mapbox + AmbientWeather + Open-Meteo + NWS + USGS
 
-// Config (from index.html)
 const MAPBOX_TOKEN = window.SSW_MAPBOX_TOKEN;
-const MPING_TOKEN = window.SSW_MPING_TOKEN; // set to string to enable mPING
+const AMBIENT_API_KEY = window.SSW_AMBIENT_KEY;
+
+mapboxgl.accessToken = MAPBOX_TOKEN;
+const map = new mapboxgl.Map({
+  container: "map",
+  style: "mapbox://styles/mapbox/dark-v11",
+  center: [-82.0, 40.0],
+  zoom: 5
+});
+map.addControl(new mapboxgl.NavigationControl(), "top-right");
 
 // Elements
 const input = document.getElementById("locationInput");
@@ -12,7 +18,6 @@ const goBtn = document.getElementById("goBtn");
 const unitToggle = document.getElementById("unitToggle");
 const refreshBtn = document.getElementById("refreshBtn");
 const locateBtn = document.getElementById("locateBtn");
-const toggleMpingBtn = document.getElementById("toggleMping");
 
 const nowCard = document.getElementById("nowCard");
 const todayGrid = document.getElementById("todayGrid");
@@ -24,18 +29,6 @@ let unitPrimary = localStorage.getItem("ssw-unit") || "F";
 let lastLoc = JSON.parse(localStorage.getItem("ssw-last-loc") || "null");
 let refreshTimer = null;
 let lastTemps = { f: null, c: null };
-let map = null;
-let mpingEnabled = false;
-
-// Map init
-mapboxgl.accessToken = MAPBOX_TOKEN;
-map = new mapboxgl.Map({
-  container: "map",
-  style: "mapbox://styles/mapbox/dark-v11",
-  center: [-82.0, 40.0],
-  zoom: 5
-});
-map.addControl(new mapboxgl.NavigationControl(), "top-right");
 
 // Handlers
 goBtn.addEventListener("click", () => {
@@ -57,16 +50,6 @@ locateBtn.addEventListener("click", () => {
   if (lastLoc) {
     map.flyTo({ center: [lastLoc.lon, lastLoc.lat], zoom: 8, essential: true });
     addCenterMarker(lastLoc.lat, lastLoc.lon);
-  }
-});
-
-toggleMpingBtn.addEventListener("click", async () => {
-  mpingEnabled = !mpingEnabled;
-  toggleMpingBtn.textContent = `mPING: ${mpingEnabled ? "On" : "Off"}`;
-  if (mpingEnabled && lastLoc) {
-    await addMpingLayer(lastLoc.lat, lastLoc.lon);
-  } else {
-    removeMpingLayer();
   }
 });
 
@@ -125,7 +108,7 @@ async function loadAll(lat, lon) {
     loadWeather(lat, lon).catch(() => failures++),
     loadAlerts(lat, lon).catch(() => failures++),
     loadWater(lat, lon).catch(() => failures++),
-    mpingEnabled ? addMpingLayer(lat, lon).catch(() => failures++) : Promise.resolve()
+    loadAmbientStations().catch(() => failures++)
   ]);
 
   showCard(nowCard);
@@ -177,9 +160,8 @@ function renderNowOM(data) {
   const hum = c.relative_humidity_2m;
   const code = c.weather_code;
 
-  // Store temperatures for unit toggle safely (Open-Meteo already in requested units)
-  lastTemps.f = unitPrimary === "F" ? (Number.isFinite(temp) ? temp : null) : (Number.isFinite(temp) ? cToF(temp) : null);
-  lastTemps.c = unitPrimary === "C" ? (Number.isFinite(temp) ? temp : null) : (Number.isFinite(temp) ? fToC(temp) : null);
+  lastTemps.f = unitPrimary === "F" ? temp : cToF(temp);
+  lastTemps.c = unitPrimary === "C" ? temp : fToC(temp);
 
   const shownTemp = unitPrimary === "F" ? lastTemps.f : lastTemps.c;
 
@@ -209,20 +191,16 @@ function renderHoursOM(data) {
     const label = t.toLocaleTimeString([], { hour: "numeric" });
 
     const tempRaw = temps[i];
-    const tempShown = Number.isFinite(tempRaw)
-      ? tempRaw
-      : null;
-
     const wind = winds[i];
     const hum = hums[i];
     const prec = precs[i];
     const code = codes[i];
 
-    const div = document.createElement("div");
+        const div = document.createElement("div");
     div.className = "hour";
     div.innerHTML = `
       <div class="h-time">${label}</div>
-      <div class="h-temp">${Number.isFinite(tempShown) ? Math.round(tempShown) : "--"}°</div>
+      <div class="h-temp">${Number.isFinite(tempRaw) ? Math.round(tempRaw) : "--"}°</div>
       <div class="h-meta">${codeToEmoji(code)} ${codeToSummary(code)}</div>
       <div class="h-meta">💨 ${Number.isFinite(wind) ? Math.round(wind) : "--"} mph • 💧 ${Number.isFinite(hum) ? Math.round(hum) : "--"}% • ☔ ${Number.isFinite(prec) ? prec.toFixed(2) : "0.00"}"</div>
     `;
@@ -230,6 +208,7 @@ function renderHoursOM(data) {
   }
 }
 
+/* Daily forecast */
 function renderDailyOM(data) {
   const daysWrap = document.getElementById("days");
   daysWrap.innerHTML = "";
@@ -241,115 +220,111 @@ function renderDailyOM(data) {
 
   for (let i = 0; i < Math.min(7, times.length); i++) {
     const label = new Date(times[i]).toLocaleDateString([], { weekday: "short" });
-
     const hiRaw = tmax[i];
     const loRaw = tmin[i];
-
-    const hiShown = Number.isFinite(hiRaw) ? hiRaw : null;
-    const loShown = Number.isFinite(loRaw) ? loRaw : null;
     const code = codes[i];
 
     const div = document.createElement("div");
     div.className = "hour";
     div.innerHTML = `
       <div class="h-time">${label}</div>
-      <div class="h-temp">${Number.isFinite(hiShown) ? Math.round(hiShown) : "--"}°${Number.isFinite(loShown) ? ` / ${Math.round(loShown)}°` : ""}</div>
+      <div class="h-temp">${Number.isFinite(hiRaw) ? Math.round(hiRaw) : "--"}°${Number.isFinite(loRaw) ? ` / ${Math.round(loRaw)}°` : ""}</div>
       <div class="h-meta">${codeToEmoji(code)} ${codeToSummary(code)}</div>
     `;
     daysWrap.appendChild(div);
   }
 }
 
-/* NWS alerts (by forecast zone) */
-async function loadAlerts(lat, lon) {
+/* USGS helpers */
+function extractSitesFromJson(json) {
+  const arr = json?.value?.site ?? [];
+  return arr.map(s => s?.siteCode?.[0]?.value).filter(Boolean);
+}
+function parseUSGSInstant(json) {
+  const ts = json?.value?.timeSeries ?? [];
+  let name = null, flow = null, stage = null, trend = null;
+  if (ts[0]?.sourceInfo?.siteName) name = ts[0].sourceInfo.siteName;
+  const flowSeries = ts.find(s => s.variable?.variableCode?.[0]?.value === "00060");
+  const stageSeries = ts.find(s => s.variable?.variableCode?.[0]?.value === "00065");
+  const flowVals = (flowSeries?.values?.[0]?.value ?? []).slice(-3).map(v => parseFloat(v?.value));
+  const stageVals = (stageSeries?.values?.[0]?.value ?? []).slice(-3).map(v => parseFloat(v?.value));
+  flow = Number.isFinite(flowVals.slice(-1)[0]) ? flowVals.slice(-1)[0] : null;
+  stage = Number.isFinite(stageVals.slice(-1)[0]) ? stageVals.slice(-1)[0] : null;
+  const delta = (Number.isFinite(stageVals[0]) && Number.isFinite(stageVals.slice(-1)[0]))
+    ? stageVals.slice(-1)[0] - stageVals[0]
+    : null;
+  trend = delta != null ? (delta > 0.02 ? "up" : delta < -0.02 ? "down" : "steady") : null;
+  return { name, flow, stage, trend };
+}
+
+/* AmbientWeather integration */
+async function loadAmbientStations() {
   try {
-    const pointsRes = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
-    if (!pointsRes.ok) throw new Error("points failed");
-    const points = await pointsRes.json();
-    const zoneId = points?.properties?.forecastZone?.split("/").pop();
-    if (!zoneId) throw new Error("no zone");
+    const url = `https://api.ambientweather.net/v1/devices?apiKey=${AMBIENT_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("AmbientWeather fetch failed");
+    const stations = await res.json();
 
-    const alRes = await fetch(`https://api.weather.gov/alerts/active?zone=${zoneId}`);
-    if (!alRes.ok) throw new Error("alerts failed");
-    const alerts = await alRes.json();
-    const features = alerts?.features || [];
+    const features = stations.map(st => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [st.info.lon, st.info.lat] },
+      properties: {
+        name: st.info.name || st.macAddress,
+        temp: st.lastData.tempf,
+        rain: st.lastData.hourlyrainin,
+        wind: st.lastData.windspeedmph,
+        humidity: st.lastData.humidity
+      }
+    }));
 
-    const html = features.slice(0, 4).map(a => {
-      const p = a.properties || {};
-      const title = p.event || "Alert";
-      const severity = (p.severity || "").toLowerCase();
-      const area = (p.areaDesc || "").split(";").slice(0,1).join("");
-      const cls =
-        severity === "severe" ? "alert-severe" :
-        severity === "moderate" ? "alert-moderate" :
-        "alert-minor";
-      return `<div class="alert-banner ${cls}"><strong>${title}</strong> — ${p.severity || "—"}${area ? ` • ${area}` : ""}</div>`;
-    }).join("");
+    const geojson = { type: "FeatureCollection", features };
 
-    document.getElementById("alerts").innerHTML = html || `<div class="muted">No active alerts.</div>`;
-    setUpdated("updated-alerts");
-  } catch (e) {
-    document.getElementById("alerts").innerHTML = `<div class="muted">Alerts unavailable.</div>`;
-    showOffline("⚠️ Alerts unavailable");
+    if (map.getSource("ambient")) {
+      map.getSource("ambient").setData(geojson);
+    } else {
+      map.addSource("ambient", { type: "geojson", data: geojson });
+      map.addLayer({
+        id: "ambient-layer",
+        type: "circle",
+        source: "ambient",
+        paint: {
+          "circle-radius": 6,
+          "circle-color": [
+            "interpolate",
+            ["linear"],
+            ["get", "rain"],
+            0, "#9bffb5",
+            0.1, "#00c853",
+            0.5, "#2196f3",
+            1.0, "#ff9800",
+            2.0, "#f44336"
+          ],
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#0b0f14"
+        }
+      });
+
+      map.on("click", "ambient-layer", (e) => {
+        const p = e.features[0].properties;
+        new mapboxgl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <strong>${p.name}</strong><br>
+            🌡️ Temp: ${p.temp}°F<br>
+            💧 Rain: ${p.rain} in/hr<br>
+            💨 Wind: ${p.wind} mph<br>
+            Humidity: ${p.humidity}%
+          `)
+          .addTo(map);
+      });
+    }
+  } catch (err) {
+    showOffline("⚠️ AmbientWeather data unavailable");
   }
 }
 
-/* USGS water gauges (legacy service with robust fallback) */
-async function loadWater(lat, lon) {
-  try {
-    const status = document.getElementById("water-status");
-    status.textContent = "Finding nearby gauges…";
-
-    const siteUrl = `https://waterservices.usgs.gov/nwis/site/?format=json&lat=${lat}&lon=${lon}&radius=40&siteType=ST&hasDataTypeCd=iv`;
-    const siteRes = await fetch(siteUrl);
-    if (!siteRes.ok) throw new Error("site search failed");
-    const sitesJson = await siteRes.json();
-    const siteArr = extractSitesFromJson(sitesJson);
-    const topSites = siteArr.slice(0, 4);
-
-    const gaugesEl = document.getElementById("gauges");
-    gaugesEl.innerHTML = "";
-
-    if (topSites.length === 0) {
-      status.textContent = "No nearby river gauges found.";
-      setUpdated("updated-water");
-      return;
-    }
-
-    status.textContent = `Showing ${topSites.length} nearby gauges`;
-
-    for (const site of topSites) {
-      const ivUrl = `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${site}&parameterCd=00060,00065&siteStatus=active`;
-      const ivRes = await fetch(ivUrl);
-      if (!ivRes.ok) continue;
-      const ivJson = await ivRes.json();
-      const { name, flow, stage, trend } = parseUSGSInstant(ivJson);
-
-      const card = document.createElement("div");
-      card.className = "gauge-card";
-      card.innerHTML = `
-        <div class="gauge-title">${name || site}</div>
-        <div class="gauge-values">
-          <span class="badge flow">Flow: ${flow != null ? `${Math.round(flow)} cfs` : "—"}</span>
-          <span class="badge stage">Stage: ${stage != null ? `${stage.toFixed(2)} ft` : "—"}</span>
-          <span class="badge ${trend === "up" ? "trend-up" : trend === "down" ? "trend-down" : ""}">
-            ${trend ? `Trend: ${trend}` : ""}
-          </span>
-        </div>
-      `;
-      gaugesEl.appendChild(card);
-    }
-
-    setUpdated("updated-water");
-  } catch (e) {
-    document.getElementById("water-status").textContent = "Error loading gauges.";
-    showOffline("⚠️ River gauges unavailable");
-  }
-}
-
-/* Map helpers */
+/* UI helpers */
 function addCenterMarker(lat, lon) {
-  // Remove existing marker layer if present
   if (map.getSource("center-point")) {
     map.removeLayer("center-point-layer");
     map.removeSource("center-point");
@@ -363,103 +338,6 @@ function addCenterMarker(lat, lon) {
   });
 }
 
-async function addMpingLayer(lat, lon) {
-  if (!MPING_TOKEN) {
-    showOffline("mPING disabled: no API token");
-    return;
-  }
-  const bbox = computeBbox(lat, lon, 2.0); // ~2 deg box
-  const url = `https://mping.ou.edu/api/mping/api/v2/reports?in_bbox=${bbox}&obtime_gte=${isoMinusHours(6)}`;
-  const res = await fetch(url, { headers: { Authorization: `Token ${MPING_TOKEN}` } });
-  if (!res.ok) throw new Error("mPING fetch failed");
-  const json = await res.json();
-
-  const features = (json || []).map(r => ({
-    type: "Feature",
-    geometry: { type: "Point", coordinates: [r.longitude, r.latitude] },
-    properties: { category: r.category, description: r.description }
-  }));
-
-  const geojson = { type: "FeatureCollection", features };
-
-  if (map.getSource("mping")) {
-    map.getSource("mping").setData(geojson);
-  } else {
-    map.addSource("mping", { type: "geojson", data: geojson });
-    map.addLayer({
-      id: "mping-layer",
-      type: "circle",
-      source: "mping",
-      paint: {
-        "circle-radius": 5,
-        "circle-color": [
-          "match",
-          ["get", "category"],
-          "hail", "#ffb300",
-          "snow", "#8ab4f8",
-          "rain", "#00c853",
-          "freezing_rain", "#e91e63",
-          "sleet", "#9c27b0",
-          /* other */ "#9bffb5"
-        ],
-        "circle-stroke-width": 1,
-        "circle-stroke-color": "#0b0f14"
-      }
-    });
-    map.on("click", "mping-layer", (e) => {
-      const p = e.features[0].properties;
-      new mapboxgl.Popup()
-        .setLngLat(e.lngLat)
-        .setHTML(`<strong>${p.category}</strong><br>${p.description}`)
-        .addTo(map);
-    });
-    map.on("mouseenter", "mping-layer", () => map.getCanvas().style.cursor = "pointer");
-    map.on("mouseleave", "mping-layer", () => map.getCanvas().style.cursor = "");
-  }
-}
-
-function removeMpingLayer() {
-  if (map.getLayer("mping-layer")) map.removeLayer("mping-layer");
-  if (map.getSource("mping")) map.removeSource("mping");
-}
-
-/* USGS helpers */
-function extractSitesFromJson(json) {
-  const arr = json?.value?.site ?? [];
-  return arr.map(s => s?.siteCode?.[0]?.value).filter(Boolean);
-}
-
-function parseUSGSInstant(json) {
-  const ts = json?.value?.timeSeries ?? [];
-  let name = null, flow = null, stage = null, trend = null;
-
-  if (ts[0]?.sourceInfo?.siteName) name = ts[0].sourceInfo.siteName;
-
-  const flowSeries = ts.find(s => s.variable?.variableCode?.[0]?.value === "00060");
-  const stageSeries = ts.find(s => s.variable?.variableCode?.[0]?.value === "00065");
-
-  const flowVals = (flowSeries?.values?.[0]?.value ?? []).slice(-3).map(v => parseFloat(v?.value));
-  const stageVals = (stageSeries?.values?.[0]?.value ?? []).slice(-3).map(v => parseFloat(v?.value));
-
-  flow = Number.isFinite(flowVals.slice(-1)[0]) ? flowVals.slice(-1)[0] : null;
-  stage = Number.isFinite(stageVals.slice(-1)[0]) ? stageVals.slice(-1)[0] : null;
-
-  const delta = (Number.isFinite(stageVals[0]) && Number.isFinite(stageVals.slice(-1)[0]))
-    ? stageVals.slice(-1)[0] - stageVals[0]
-    : null;
-  trend = delta != null ? (delta > 0.02 ? "up" : delta < -0.02 ? "down" : "steady") : null;
-
-  return { name, flow, stage, trend };
-}
-
-/* Unit re-render */
-function reRenderUnits() {
-  const shownTemp = unitPrimary === "F" ? lastTemps.f : lastTemps.c;
-  document.getElementById("nowTemp").textContent = Number.isFinite(shownTemp) ? `${Math.round(shownTemp)}°` : `--°`;
-  if (lastLoc) loadWeather(lastLoc.lat, lastLoc.lon);
-}
-
-/* UI helpers */
 function showCard(el) { el.classList.remove("hidden"); el.classList.add("show"); }
 function showError(msg) {
   showCard(nowCard);
@@ -469,8 +347,6 @@ function showError(msg) {
   document.getElementById("nowWind").textContent = `Wind -- mph`;
   document.getElementById("nowHum").textContent = `Humidity --%`;
 }
-
-/* Offline + updated banner helpers */
 function setUpdated(id) {
   const el = document.getElementById(id);
   if (el) el.textContent = "Last updated: " + new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
@@ -485,7 +361,7 @@ function clearOffline() {
   banner.classList.add("hidden");
 }
 
-/* Weather code mapping and icons */
+/* Weather code mapping */
 function codeToSummary(code) {
   const map = {
     0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
@@ -498,7 +374,6 @@ function codeToSummary(code) {
   };
   return map[code] ?? "—";
 }
-
 function codeToEmoji(code) {
   if ([0,1].includes(code)) return "☀️";
   if ([2].includes(code)) return "🌤️";
@@ -515,10 +390,13 @@ function setIconTheme(code) {
   if (!sun || !cloud) return;
   sun.style.filter = ""; cloud.style.filter = "";
 
-  if ([0,1].includes(code)) { sun.style.opacity = "1"; cloud.style.opacity = "0.15"; }
-  else if ([2].includes(code)) { sun.style.opacity = "0.9"; cloud.style.opacity = "0.6"; }
-  else if ([3,45,48].includes(code)) { sun.style.opacity = "0.25"; cloud.style.opacity = "0.95"; }
-  else if ([51,53,55,61,63,65,80,81,82].includes(code)) {
+  if ([0,1].includes(code)) {
+    sun.style.opacity = "1"; cloud.style.opacity = "0.15";
+  } else if ([2].includes(code)) {
+    sun.style.opacity = "0.9"; cloud.style.opacity = "0.6";
+  } else if ([3,45,48].includes(code)) {
+    sun.style.opacity = "0.25"; cloud.style.opacity = "0.95";
+  } else if ([51,53,55,61,63,65,80,81,82].includes(code)) {
     sun.style.opacity = "0.2"; cloud.style.opacity = "1";
     cloud.style.filter = "drop-shadow(0 6px 20px rgba(110,140,170,0.45))";
   } else if ([71,73,75].includes(code)) {
@@ -532,13 +410,3 @@ function setIconTheme(code) {
 /* Conversions */
 function cToF(c) { return (c * 9) / 5 + 32; }
 function fToC(f) { return (f - 32) * 5 / 9; }
-
-/* Util */
-function computeBbox(lat, lon, deg = 1.0) {
-  const minLon = lon - deg, minLat = lat - deg, maxLon = lon + deg, maxLat = lat + deg;
-  return `${minLon},${minLat},${maxLon},${maxLat}`;
-}
-function isoMinusHours(h) {
-  const d = new Date(Date.now() - h * 3600 * 1000);
-  return d.toISOString().split(".")[0] + "Z";
-}
