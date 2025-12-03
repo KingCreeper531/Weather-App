@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Weather Dashboard — Tomorrow.io + NEXRAD Style</title>
+  <title>Weather Dashboard — Open-Meteo + Tomorrow.io Radar</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   
@@ -27,51 +27,35 @@
     <div id="searchResults" class="search-results hidden"></div>
   </div>
 
-  <!-- Time Controls (NEXRAD Style) -->
-  <div class="time-controls">
-    <div class="time-header">
-      <div class="time-indicator">
-        <div class="live-dot"></div>
-        <span id="currentTime">Now</span>
-        <span id="timeMode">REALTIME</span>
+  <!-- Radar Animation Controls -->
+  <div class="radar-animation-controls">
+    <div class="animation-header">
+      <div class="radar-time-info">
+        <span id="radarTime">Loading...</span>
+        <span id="radarTimeMode">LIVE</span>
       </div>
     </div>
     
-    <div class="time-options">
-      <div class="time-option active" data-time="now" data-mode="realtime">
-        <div class="time-dot live"></div>
+    <div class="animation-controls">
+      <button id="playPauseBtn" class="control-btn">⏸️</button>
+      <button id="prevBtn" class="control-btn">⏮️</button>
+      <button id="nextBtn" class="control-btn">⏭️</button>
+      <div class="speed-control">
+        <label>Speed:</label>
+        <select id="animationSpeed">
+          <option value="2000">Slow</option>
+          <option value="1000" selected>Normal</option>
+          <option value="500">Fast</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="time-slider-container">
+      <input type="range" id="timeSlider" min="0" max="11" value="11" step="1">
+      <div class="time-labels">
+        <span>-3h</span>
         <span>Now</span>
-        <small>REALTIME</small>
       </div>
-      <div class="time-option" data-time="today" data-mode="forecast">
-        <div class="time-dot"></div>
-        <span>Today</span>
-      </div>
-      <div class="time-option" data-time="tomorrow" data-mode="forecast">
-        <div class="time-dot"></div>
-        <span>Tomorrow</span>
-      </div>
-      <div class="time-option" data-time="thisweek" data-mode="forecast">
-        <div class="time-dot"></div>
-        <span>This Week</span>
-      </div>
-      <div class="time-option" data-time="nextweek" data-mode="forecast">
-        <div class="time-dot"></div>
-        <span>Next Week</span>
-      </div>
-      <div class="time-option" data-time="yesterday" data-mode="history">
-        <div class="time-dot"></div>
-        <span>Yesterday</span>
-      </div>
-      <div class="time-option" data-time="lastweek" data-mode="history">
-        <div class="time-dot"></div>
-        <span>Last Week</span>
-        <div class="dropdown-arrow">▼</div>
-      </div>
-    </div>
-    
-    <div class="all-option">
-      <span>📊 All</span>
     </div>
   </div>
 
@@ -158,8 +142,6 @@
         <option value="temperature">Temperature</option>
         <option value="windSpeed">Wind Speed</option>
         <option value="cloudCover">Cloud Cover</option>
-        <option value="humidity">Humidity</option>
-        <option value="pressure">Pressure</option>
       </select>
     </div>
     
@@ -167,10 +149,6 @@
       <label>Opacity:</label>
       <input type="range" id="opacitySlider" min="0" max="100" value="70">
       <span id="opacityValue">70%</span>
-    </div>
-
-    <div class="control-group">
-      <button id="refreshRadar" class="refresh-btn">🔄 Refresh</button>
     </div>
   </div>
 

@@ -117,9 +117,9 @@ html, body {
 }
 
 /* ============================
-   TIME CONTROLS (NEXRAD STYLE)
+   RADAR ANIMATION CONTROLS
 ============================ */
-.time-controls {
+.radar-animation-controls {
     position: absolute;
     top: 20px;
     right: 20px;
@@ -128,106 +128,97 @@ html, body {
     border-radius: 12px;
     padding: 0;
     z-index: 1000;
-    min-width: 200px;
+    min-width: 280px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.time-header {
+.animation-header {
     padding: 16px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.time-indicator {
+.radar-time-info {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.live-dot {
-    width: 8px;
-    height: 8px;
-    background: #00ff88;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-#currentTime {
+#radarTime {
     font-weight: 600;
     font-size: 1rem;
+    color: #00aaff;
 }
 
-#timeMode {
+#radarTimeMode {
     font-size: 0.75rem;
     color: #00ff88;
     font-weight: 500;
 }
 
-.time-options {
-    padding: 8px 0;
-}
-
-.time-option {
+.animation-controls {
+    padding: 16px;
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.control-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: white;
     cursor: pointer;
+    font-size: 1rem;
     transition: all 0.2s;
-    position: relative;
 }
 
-.time-option:hover {
-    background: rgba(255, 255, 255, 0.05);
+.control-btn:hover {
+    background: rgba(0, 170, 255, 0.3);
 }
 
-.time-option.active {
-    background: rgba(0, 255, 136, 0.1);
-    border-left: 3px solid #00ff88;
+.control-btn.playing {
+    background: rgba(0, 255, 136, 0.2);
 }
 
-.time-dot {
-    width: 6px;
-    height: 6px;
-    background: #666;
-    border-radius: 50%;
-}
-
-.time-dot.live {
-    background: #00ff88;
-    animation: pulse 2s infinite;
-}
-
-.time-option span {
-    font-weight: 500;
-}
-
-.time-option small {
-    font-size: 0.75rem;
-    color: #999;
+.speed-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-left: auto;
 }
 
-.dropdown-arrow {
-    margin-left: auto;
+.speed-control label {
+    font-size: 0.85rem;
+    color: #ccc;
+}
+
+.speed-control select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #fff;
+    padding: 4px 6px;
     font-size: 0.8rem;
-    color: #666;
 }
 
-.all-option {
-    padding: 12px 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    cursor: pointer;
-    transition: background 0.2s;
+.time-slider-container {
+    padding: 16px;
 }
 
-.all-option:hover {
-    background: rgba(255, 255, 255, 0.05);
+#timeSlider {
+    width: 100%;
+    margin-bottom: 8px;
+    accent-color: #00aaff;
+}
+
+.time-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: #999;
 }
 
 /* ============================
@@ -493,21 +484,6 @@ html, body {
     min-width: 35px;
 }
 
-.refresh-btn {
-    background: #00aaff;
-    border: none;
-    border-radius: 6px;
-    color: white;
-    padding: 8px 12px;
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.refresh-btn:hover {
-    background: #0088cc;
-}
-
 /* ============================
    RADAR LEGEND
 ============================ */
@@ -585,10 +561,10 @@ html, body {
         width: calc(100vw - 40px);
     }
     
-    .time-controls {
+    .radar-animation-controls {
         top: 80px;
         right: 10px;
-        min-width: 180px;
+        min-width: 250px;
     }
     
     .weather-panel {

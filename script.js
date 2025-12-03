@@ -8,20 +8,30 @@ const MAPBOX_KEY = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2a
 let currentLat = 39.8283;
 let currentLng = -98.5795; // Center of US
 let currentRadarType = 'precipitationIntensity';
-let currentTimeMode = 'now';
-let clickMarker = null;
+
+// Animation state
+let isAnimating = true;
+let animationInterval = null;
+let currentTimeIndex = 11; // Start at "now" (latest frame)
+let radarTimes = [];
+let animationSpeed = 1000;
 
 // ================================
-//  WEATHER CODE TRANSLATION
+//  WEATHER CODE TRANSLATION (Open-Meteo)
 // ================================
 const weatherText = {
-    1000: "Clear", 1100: "Mostly Clear", 1101: "Partly Cloudy", 1102: "Cloudy",
-    2000: "Fog", 2100: "Light Fog", 3000: "Light Wind", 3001: "Windy", 3002: "Strong Wind",
-    4000: "Drizzle", 4001: "Rain", 4200: "Light Rain", 4201: "Heavy Rain",
-    5000: "Snow", 5001: "Flurries", 5100: "Light Snow", 5101: "Heavy Snow",
-    6000: "Freezing Drizzle", 6001: "Freezing Rain", 6200: "Light Freezing Rain", 6201: "Heavy Freezing Rain",
-    7000: "Ice Pellets", 7101: "Heavy Ice Pellets", 7102: "Light Ice Pellets",
-    8000: "Thunderstorm"
+    0: "Clear sky",
+    1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Fog", 48: "Depositing rime fog",
+    51: "Light drizzle", 53: "Moderate drizzle", 55: "Dense drizzle",
+    56: "Light freezing drizzle", 57: "Dense freezing drizzle",
+    61: "Slight rain", 63: "Moderate rain", 65: "Heavy rain",
+    66: "Light freezing rain", 67: "Heavy freezing rain",
+    71: "Slight snow", 73: "Moderate snow", 75: "Heavy snow",
+    77: "Snow grains",
+    80: "Slight rain showers", 81: "Moderate rain showers", 82: "Violent rain showers",
+    85: "Slight snow showers", 86: "Heavy snow showers",
+    95: "Thunderstorm", 96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail"
 };
 
 // ================================
@@ -42,68 +52,28 @@ const RADAR_SOURCE = "nexrad-radar";
 const RADAR_LAYER = "nexrad-radar-layer";
 
 // ================================
-//  SEARCH FUNCTIONALITY
+//  RADAR ANIMATION FUNCTIONS
 // ================================
-async function searchLocation(query) {
-    try {
-        // Use Mapbox Geocoding API
-        const response = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_KEY}&limit=5&country=US`
-        );
-        const data = await response.json();
-        
-        return data.features.map(feature => ({
-            name: feature.place_name,
-            lng: feature.center[0],
-            lat: feature.center[1]
-        }));
-    } catch (error) {
-        console.error('Search error:', error);
-        return [];
-    }
-}
-
-function showSearchResults(results) {
-    const resultsContainer = document.getElementById('searchResults');
+function generateRadarTimes() {
+    const times = [];
+    const now = new Date();
     
-    if (results.length === 0) {
-        resultsContainer.innerHTML = '<div class="search-result-item">No results found</div>';
-    } else {
-        resultsContainer.innerHTML = results.map(result => 
-            `<div class="search-result-item" data-lat="${result.lat}" data-lng="${result.lng}">
-                ${result.name}
-            </div>`
-        ).join('');
+    // Generate 12 time frames: 11 historical (every 15 minutes) + now
+    for (let i = 11; i >= 0; i--) {
+        const time = new Date(now.getTime() - (i * 15 * 60 * 1000));
+        times.push(time);
     }
     
-    resultsContainer.classList.remove('hidden');
+    radarTimes = times;
+    return times;
 }
 
-function hideSearchResults() {
-    document.getElementById('searchResults').classList.add('hidden');
-}
-
-// ================================
-//  RADAR FUNCTIONS
-// ================================
-function updateRadarLayer(radarType, timeMode = 'now') {
-    let timestamp = 'now';
-    
-    // Convert time mode to appropriate timestamp
-    if (timeMode !== 'now') {
-        const now = new Date();
-        switch(timeMode) {
-            case 'yesterday':
-                timestamp = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-                break;
-            case 'tomorrow':
-                timestamp = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-                break;
-            default:
-                timestamp = 'now';
-        }
+function updateRadarLayer(radarType, timeIndex = 11) {
+    if (!radarTimes.length) {
+        generateRadarTimes();
     }
-
+    
+    const timestamp = timeIndex === 11 ? 'now' : radarTimes[timeIndex].toISOString();
     const tileURL = `https://api.tomorrow.io/v4/map/tile/{z}/{x}/{y}/${radarType}/${timestamp}.png?apikey=${TOMORROW_API}`;
 
     if (map.getSource(RADAR_SOURCE)) {
@@ -126,7 +96,52 @@ function updateRadarLayer(radarType, timeMode = 'now') {
         });
     }
 
+    updateRadarTimeDisplay(timeIndex);
     updateLegend(radarType);
+}
+
+function updateRadarTimeDisplay(timeIndex) {
+    const timeSlider = document.getElementById('timeSlider');
+    timeSlider.value = timeIndex;
+    
+    if (timeIndex === 11) {
+        document.getElementById('radarTime').textContent = 'Now';
+        document.getElementById('radarTimeMode').textContent = 'LIVE';
+    } else {
+        const time = radarTimes[timeIndex];
+        const timeStr = time.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+        const minutesAgo = Math.round((Date.now() - time.getTime()) / 60000);
+        
+        document.getElementById('radarTime').textContent = timeStr;
+        document.getElementById('radarTimeMode').textContent = `${minutesAgo}m ago`;
+    }
+}
+
+function startAnimation() {
+    if (animationInterval) clearInterval(animationInterval);
+    
+    animationInterval = setInterval(() => {
+        currentTimeIndex = (currentTimeIndex + 1) % radarTimes.length;
+        updateRadarLayer(currentRadarType, currentTimeIndex);
+    }, animationSpeed);
+    
+    isAnimating = true;
+    document.getElementById('playPauseBtn').textContent = '⏸️';
+    document.getElementById('playPauseBtn').classList.add('playing');
+}
+
+function stopAnimation() {
+    if (animationInterval) {
+        clearInterval(animationInterval);
+        animationInterval = null;
+    }
+    
+    isAnimating = false;
+    document.getElementById('playPauseBtn').textContent = '▶️';
+    document.getElementById('playPauseBtn').classList.remove('playing');
 }
 
 function updateLegend(radarType) {
@@ -170,23 +185,6 @@ function updateLegend(radarType) {
                 { color: '#888888', label: 'Mostly' },
                 { color: '#444444', label: 'Overcast' }
             ]
-        },
-        humidity: {
-            title: 'Humidity',
-            scale: [
-                { color: '#8B4513', label: 'Dry' },
-                { color: '#FFD700', label: 'Low' },
-                { color: '#32CD32', label: 'Moderate' },
-                { color: '#1E90FF', label: 'High' }
-            ]
-        },
-        pressure: {
-            title: 'Pressure',
-            scale: [
-                { color: '#ff0000', label: 'Low' },
-                { color: '#ffff00', label: 'Normal' },
-                { color: '#00ff00', label: 'High' }
-            ]
         }
     };
 
@@ -202,28 +200,74 @@ function updateLegend(radarType) {
 }
 
 // ================================
-//  WEATHER DATA FUNCTIONS
+//  SEARCH FUNCTIONALITY
+// ================================
+async function searchLocation(query) {
+    try {
+        const response = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_KEY}&limit=5&country=US`
+        );
+        const data = await response.json();
+        
+        return data.features.map(feature => ({
+            name: feature.place_name,
+            lng: feature.center[0],
+            lat: feature.center[1]
+        }));
+    } catch (error) {
+        console.error('Search error:', error);
+        return [];
+    }
+}
+
+function showSearchResults(results) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    if (results.length === 0) {
+        resultsContainer.innerHTML = '<div class="search-result-item">No results found</div>';
+    } else {
+        resultsContainer.innerHTML = results.map(result => 
+            `<div class="search-result-item" data-lat="${result.lat}" data-lng="${result.lng}">
+                ${result.name}
+            </div>`
+        ).join('');
+    }
+    
+    resultsContainer.classList.remove('hidden');
+}
+
+function hideSearchResults() {
+    document.getElementById('searchResults').classList.add('hidden');
+}
+
+// ================================
+//  WEATHER DATA FUNCTIONS (Open-Meteo)
 // ================================
 async function getWeatherData(lat, lng) {
     try {
-        const realtimeUrl = `https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lng}&apikey=${TOMORROW_API}`;
-        const hourlyUrl = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lng}&timesteps=1h&apikey=${TOMORROW_API}`;
-        const dailyUrl = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lng}&timesteps=1d&apikey=${TOMORROW_API}`;
+        // Current weather
+        const currentUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`;
         
-        const [realtimeRes, hourlyRes, dailyRes] = await Promise.all([
-            fetch(realtimeUrl),
+        // Hourly forecast
+        const hourlyUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,showers,snowfall,weather_code,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,uv_index&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=2`;
+        
+        // Daily forecast
+        const dailyUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,daylight_duration,sunshine_duration,uv_index_max,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=7`;
+        
+        const [currentRes, hourlyRes, dailyRes] = await Promise.all([
+            fetch(currentUrl),
             fetch(hourlyUrl),
             fetch(dailyUrl)
         ]);
         
-        const realtimeData = await realtimeRes.json();
+        const currentData = await currentRes.json();
         const hourlyData = await hourlyRes.json();
         const dailyData = await dailyRes.json();
         
         return {
-            current: realtimeData.data,
-            hourly: hourlyData.timelines.hourly.slice(0, 24),
-            daily: dailyData.timelines.daily.slice(0, 7)
+            current: currentData.current,
+            hourly: hourlyData.hourly,
+            daily: dailyData.daily
         };
     } catch (error) {
         console.error('Weather data fetch error:', error);
@@ -253,6 +297,14 @@ function getWindDirection(degrees) {
     return directions[Math.round(degrees / 22.5) % 16];
 }
 
+function calculateDewPoint(temp, humidity) {
+    // Magnus formula approximation
+    const a = 17.27;
+    const b = 237.7;
+    const alpha = ((a * temp) / (b + temp)) + Math.log(humidity / 100);
+    return (b * alpha) / (a - alpha);
+}
+
 async function updateWeatherPanel(lat, lng) {
     const weatherData = await getWeatherData(lat, lng);
     
@@ -261,7 +313,7 @@ async function updateWeatherPanel(lat, lng) {
         return;
     }
 
-    const current = weatherData.current.values;
+    const current = weatherData.current;
     
     // Update location info
     const locationName = await reverseGeocode(lat, lng);
@@ -270,48 +322,64 @@ async function updateWeatherPanel(lat, lng) {
     document.getElementById('locationCoords').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     
     // Update current weather
-    document.getElementById('currentTemp').textContent = `${Math.round(current.temperature)}°`;
-    document.getElementById('feelsLike').textContent = `Feels like ${Math.round(current.temperatureApparent)}°`;
-    document.getElementById('conditions').textContent = weatherText[current.weatherCode] || 'Unknown';
+    document.getElementById('currentTemp').textContent = `${Math.round(current.temperature_2m)}°F`;
+    document.getElementById('feelsLike').textContent = `Feels like ${Math.round(current.apparent_temperature)}°F`;
+    document.getElementById('conditions').textContent = weatherText[current.weather_code] || 'Unknown';
+    
+    // Calculate dew point
+    const dewPoint = calculateDewPoint(current.temperature_2m, current.relative_humidity_2m);
     
     // Update details
-    document.getElementById('humidity').textContent = `${Math.round(current.humidity)}%`;
-    document.getElementById('windSpeed').textContent = `${Math.round(current.windSpeed)} mph`;
-    document.getElementById('windDirection').textContent = getWindDirection(current.windDirection);
-    document.getElementById('pressure').textContent = `${Math.round(current.pressureSeaLevel)} mb`;
-    document.getElementById('visibility').textContent = `${Math.round(current.visibility)} mi`;
-    document.getElementById('uvIndex').textContent = Math.round(current.uvIndex);
-    document.getElementById('dewPoint').textContent = `${Math.round(current.dewPoint)}°`;
-    document.getElementById('cloudCover').textContent = `${Math.round(current.cloudCover)}%`;
+    document.getElementById('humidity').textContent = `${current.relative_humidity_2m}%`;
+    document.getElementById('windSpeed').textContent = `${Math.round(current.wind_speed_10m)} mph`;
+    document.getElementById('windDirection').textContent = getWindDirection(current.wind_direction_10m);
+    document.getElementById('pressure').textContent = `${Math.round(current.pressure_msl)} mb`;
+    document.getElementById('visibility').textContent = `10+ mi`; // Open-Meteo doesn't provide visibility in current
+    document.getElementById('uvIndex').textContent = '--'; // Not available in current weather
+    document.getElementById('dewPoint').textContent = `${Math.round(dewPoint)}°F`;
+    document.getElementById('cloudCover').textContent = `${current.cloud_cover}%`;
     
-    // Update hourly forecast
+    // Update hourly forecast (next 24 hours)
     const hourlyContainer = document.getElementById('hourlyData');
-    hourlyContainer.innerHTML = weatherData.hourly.map(hour => {
-        const time = new Date(hour.time);
-        const timeStr = time.getHours().toString().padStart(2, '0') + ':00';
-        
-        return `
-            <div class="hourly-item">
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    hourlyContainer.innerHTML = '';
+    for (let i = 0; i < 24; i++) {
+        const hourIndex = i;
+        if (weatherData.hourly.time[hourIndex]) {
+            const time = new Date(weatherData.hourly.time[hourIndex]);
+            const timeStr = time.getHours().toString().padStart(2, '0') + ':00';
+            
+            const hourlyItem = document.createElement('div');
+            hourlyItem.className = 'hourly-item';
+            hourlyItem.innerHTML = `
                 <div class="hourly-time">${timeStr}</div>
-                <div class="hourly-temp">${Math.round(hour.values.temperature)}°</div>
-                <div class="hourly-condition">${(weatherText[hour.values.weatherCode] || 'N/A').substring(0, 8)}</div>
-            </div>
-        `;
-    }).join('');
+                <div class="hourly-temp">${Math.round(weatherData.hourly.temperature_2m[hourIndex])}°</div>
+                <div class="hourly-condition">${(weatherText[weatherData.hourly.weather_code[hourIndex]] || 'N/A').substring(0, 8)}</div>
+            `;
+            hourlyContainer.appendChild(hourlyItem);
+        }
+    }
 
     // Update daily forecast
     const dailyContainer = document.getElementById('dailyData');
-    dailyContainer.innerHTML = weatherData.daily.map(day => {
-        const date = new Date(day.time);
-        const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-        
-        return `
-            <div class="daily-item">
+    dailyContainer.innerHTML = '';
+    
+    for (let i = 0; i < 7; i++) {
+        if (weatherData.daily.time[i]) {
+            const date = new Date(weatherData.daily.time[i]);
+            const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            
+            const dailyItem = document.createElement('div');
+            dailyItem.className = 'daily-item';
+            dailyItem.innerHTML = `
                 <div class="daily-date">${dateStr}</div>
-                <div class="daily-temps">${Math.round(day.values.temperatureMax)}° / ${Math.round(day.values.temperatureMin)}°</div>
-            </div>
-        `;
-    }).join('');
+                <div class="daily-temps">${Math.round(weatherData.daily.temperature_2m_max[i])}° / ${Math.round(weatherData.daily.temperature_2m_min[i])}°</div>
+            `;
+            dailyContainer.appendChild(dailyItem);
+        }
+    }
 }
 
 function showClickMarker(lat, lng) {
@@ -322,7 +390,6 @@ function showClickMarker(lat, lng) {
     marker.style.top = `${point.y}px`;
     marker.classList.remove('hidden');
     
-    // Hide marker after 2 seconds
     setTimeout(() => {
         marker.classList.add('hidden');
     }, 2000);
@@ -346,7 +413,9 @@ function hideWeatherPanel() {
 
 // Map initialization
 map.on('load', () => {
-    updateRadarLayer(currentRadarType, currentTimeMode);
+    generateRadarTimes();
+    updateRadarLayer(currentRadarType, currentTimeIndex);
+    startAnimation();
 });
 
 // Map click handler
@@ -400,32 +469,45 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Time controls
-document.querySelectorAll('.time-option').forEach(option => {
-    option.addEventListener('click', () => {
-        // Remove active class from all options
-        document.querySelectorAll('.time-option').forEach(opt => opt.classList.remove('active'));
-        
-        // Add active class to clicked option
-        option.classList.add('active');
-        
-        // Update current time mode
-        currentTimeMode = option.dataset.time;
-        const mode = option.dataset.mode;
-        
-        // Update display
-        document.getElementById('currentTime').textContent = option.querySelector('span').textContent;
-        document.getElementById('timeMode').textContent = mode.toUpperCase();
-        
-        // Update radar layer
-        updateRadarLayer(currentRadarType, currentTimeMode);
-    });
+// Animation controls
+document.getElementById('playPauseBtn').addEventListener('click', () => {
+    if (isAnimating) {
+        stopAnimation();
+    } else {
+        startAnimation();
+    }
+});
+
+document.getElementById('prevBtn').addEventListener('click', () => {
+    stopAnimation();
+    currentTimeIndex = Math.max(0, currentTimeIndex - 1);
+    updateRadarLayer(currentRadarType, currentTimeIndex);
+});
+
+document.getElementById('nextBtn').addEventListener('click', () => {
+    stopAnimation();
+    currentTimeIndex = Math.min(radarTimes.length - 1, currentTimeIndex + 1);
+    updateRadarLayer(currentRadarType, currentTimeIndex);
+});
+
+document.getElementById('animationSpeed').addEventListener('change', (e) => {
+    animationSpeed = parseInt(e.target.value);
+    if (isAnimating) {
+        stopAnimation();
+        startAnimation();
+    }
+});
+
+document.getElementById('timeSlider').addEventListener('input', (e) => {
+    stopAnimation();
+    currentTimeIndex = parseInt(e.target.value);
+    updateRadarLayer(currentRadarType, currentTimeIndex);
 });
 
 // Radar type selector
 document.getElementById('radarType').addEventListener('change', (e) => {
     currentRadarType = e.target.value;
-    updateRadarLayer(currentRadarType, currentTimeMode);
+    updateRadarLayer(currentRadarType, currentTimeIndex);
 });
 
 // Opacity slider
@@ -438,11 +520,6 @@ document.getElementById('opacitySlider').addEventListener('input', (e) => {
     }
 });
 
-// Refresh radar button
-document.getElementById('refreshRadar').addEventListener('click', () => {
-    updateRadarLayer(currentRadarType, currentTimeMode);
-});
-
 // Close weather panel
 document.getElementById('closePanel').addEventListener('click', hideWeatherPanel);
 
@@ -450,24 +527,7 @@ document.getElementById('closePanel').addEventListener('click', hideWeatherPanel
 //  INITIALIZATION
 // ================================
 
-// Update time display
-function updateTimeDisplay() {
-    const now = new Date();
-    document.getElementById('currentTime').textContent = 
-        now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-}
-
-// Update time display every minute
-setInterval(updateTimeDisplay, 60000);
-updateTimeDisplay();
-
-// Auto-refresh radar every 5 minutes for realtime data
-setInterval(() => {
-    if (currentTimeMode === 'now') {
-        updateRadarLayer(currentRadarType, currentTimeMode);
-    }
-}, 300000);
-
 console.log('Weather Dashboard initialized successfully!');
+console.log('Weather data: Open-Meteo API (free, no API key required)');
+console.log('Radar data: Tomorrow.io API');
 console.log('Click anywhere on the map to get weather information for that location.');
-console.log('Use the search bar to find specific locations by address or zip code.');
