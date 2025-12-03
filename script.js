@@ -1,30 +1,48 @@
-// Storm Surge Weather — Open-Meteo + NWS alerts + RainViewer + USGS
-// City or ZIP input, auto-refresh, unit toggle, last location memory, manual refresh,
-// updated timestamps, offline indicator, resilient radar embed
+// Storm Surge Weather — Mapbox left panel + right info
+// Open-Meteo forecast, NWS alerts, USGS gauges, optional mPING overlays
+// ZIP or city input, unit toggle, last location memory, auto-refresh, timestamps, offline banner
 
+// Config (from index.html)
+const MAPBOX_TOKEN = window.SSW_MAPBOX_TOKEN;
+const MPING_TOKEN = window.SSW_MPING_TOKEN; // set to string to enable mPING
+
+// Elements
 const input = document.getElementById("locationInput");
 const goBtn = document.getElementById("goBtn");
 const unitToggle = document.getElementById("unitToggle");
 const refreshBtn = document.getElementById("refreshBtn");
+const locateBtn = document.getElementById("locateBtn");
+const toggleMpingBtn = document.getElementById("toggleMping");
 
 const nowCard = document.getElementById("nowCard");
 const todayGrid = document.getElementById("todayGrid");
 const dailyGrid = document.getElementById("dailyGrid");
 const alertsCard = document.getElementById("alertsCard");
-const radarCard = document.getElementById("radarCard");
 const waterCard = document.getElementById("waterCard");
 
 let unitPrimary = localStorage.getItem("ssw-unit") || "F";
 let lastLoc = JSON.parse(localStorage.getItem("ssw-last-loc") || "null");
 let refreshTimer = null;
 let lastTemps = { f: null, c: null };
+let map = null;
+let mpingEnabled = false;
 
+// Map init
+mapboxgl.accessToken = MAPBOX_TOKEN;
+map = new mapboxgl.Map({
+  container: "map",
+  style: "mapbox://styles/mapbox/dark-v11",
+  center: [-82.0, 40.0],
+  zoom: 5
+});
+map.addControl(new mapboxgl.NavigationControl(), "top-right");
+
+// Handlers
 goBtn.addEventListener("click", () => {
   const query = input.value.trim();
   if (!query) return;
   resolveLocation(query);
 });
-
 input.addEventListener("keydown", e => { if (e.key === "Enter") goBtn.click(); });
 
 unitToggle.addEventListener("click", () => {
@@ -33,13 +51,32 @@ unitToggle.addEventListener("click", () => {
   reRenderUnits();
 });
 
-refreshBtn.addEventListener("click", () => {
-  if (lastLoc) loadAll(lastLoc.lat, lastLoc.lon);
+refreshBtn.addEventListener("click", () => { if (lastLoc) loadAll(lastLoc.lat, lastLoc.lon); });
+
+locateBtn.addEventListener("click", () => {
+  if (lastLoc) {
+    map.flyTo({ center: [lastLoc.lon, lastLoc.lat], zoom: 8, essential: true });
+    addCenterMarker(lastLoc.lat, lastLoc.lon);
+  }
+});
+
+toggleMpingBtn.addEventListener("click", async () => {
+  mpingEnabled = !mpingEnabled;
+  toggleMpingBtn.textContent = `mPING: ${mpingEnabled ? "On" : "Off"}`;
+  if (mpingEnabled && lastLoc) {
+    await addMpingLayer(lastLoc.lat, lastLoc.lon);
+  } else {
+    removeMpingLayer();
+  }
 });
 
 window.addEventListener("DOMContentLoaded", () => {
   if (lastLoc) {
     input.value = lastLoc.query;
+    map.once("load", () => {
+      map.flyTo({ center: [lastLoc.lon, lastLoc.lat], zoom: 8 });
+      addCenterMarker(lastLoc.lat, lastLoc.lon);
+    });
     loadAll(lastLoc.lat, lastLoc.lon);
     setupAutoRefresh();
   }
@@ -64,6 +101,10 @@ async function resolveLocation(query) {
     }
     lastLoc = { lat, lon, query };
     localStorage.setItem("ssw-last-loc", JSON.stringify(lastLoc));
+
+    map.flyTo({ center: [lon, lat], zoom: 8 });
+    addCenterMarker(lat, lon);
+
     await loadAll(lat, lon);
     setupAutoRefresh();
   } catch (e) {
@@ -83,15 +124,14 @@ async function loadAll(lat, lon) {
   await Promise.allSettled([
     loadWeather(lat, lon).catch(() => failures++),
     loadAlerts(lat, lon).catch(() => failures++),
-    loadRadar(lat, lon).catch(() => failures++),
-    loadWater(lat, lon).catch(() => failures++)
+    loadWater(lat, lon).catch(() => failures++),
+    mpingEnabled ? addMpingLayer(lat, lon).catch(() => failures++) : Promise.resolve()
   ]);
 
   showCard(nowCard);
   showCard(todayGrid);
   showCard(dailyGrid);
   showCard(alertsCard);
-  showCard(radarCard);
   showCard(waterCard);
 
   if (failures > 0) showOffline("⚠️ Some data sources unavailable at last refresh");
@@ -137,17 +177,11 @@ function renderNowOM(data) {
   const hum = c.relative_humidity_2m;
   const code = c.weather_code;
 
-  // Store temperatures for unit toggle
-  if (unitPrimary === "F") {
-    lastTemps.f = Number.isFinite(temp) ? temp : null;
-    lastTemps.c = Number.isFinite(temp) ? fToC(temp) : null;
-  } else {
-    lastTemps.c = Number.isFinite(temp) ? temp : null;
-    lastTemps.f = Number.isFinite(temp) ? cToF(temp) : null;
-  }
+  // Store temperatures for unit toggle safely (Open-Meteo already in requested units)
+  lastTemps.f = unitPrimary === "F" ? (Number.isFinite(temp) ? temp : null) : (Number.isFinite(temp) ? cToF(temp) : null);
+  lastTemps.c = unitPrimary === "C" ? (Number.isFinite(temp) ? temp : null) : (Number.isFinite(temp) ? fToC(temp) : null);
 
   const shownTemp = unitPrimary === "F" ? lastTemps.f : lastTemps.c;
-  const shownFeels = unitPrimary === "F" ? (Number.isFinite(feels) ? feels : (Number.isFinite(feels) ? feels : null)) : (Number.isFinite(feels) ? feels : null);
 
   document.getElementById("nowTemp").textContent = Number.isFinite(shownTemp) ? `${Math.round(shownTemp)}°` : `--°`;
   document.getElementById("nowFeels").textContent = `Feels like ${Number.isFinite(feels) ? Math.round(feels) : "--"}°`;
@@ -176,7 +210,7 @@ function renderHoursOM(data) {
 
     const tempRaw = temps[i];
     const tempShown = Number.isFinite(tempRaw)
-      ? (unitPrimary === "F" ? tempRaw : fToC(tempRaw))
+      ? tempRaw
       : null;
 
     const wind = winds[i];
@@ -211,14 +245,8 @@ function renderDailyOM(data) {
     const hiRaw = tmax[i];
     const loRaw = tmin[i];
 
-    const hiShown = Number.isFinite(hiRaw)
-      ? (unitPrimary === "F" ? hiRaw : fToC(hiRaw))
-      : null;
-
-    const loShown = Number.isFinite(loRaw)
-      ? (unitPrimary === "F" ? loRaw : fToC(loRaw))
-      : null;
-
+    const hiShown = Number.isFinite(hiRaw) ? hiRaw : null;
+    const loShown = Number.isFinite(loRaw) ? loRaw : null;
     const code = codes[i];
 
     const div = document.createElement("div");
@@ -266,63 +294,12 @@ async function loadAlerts(lat, lon) {
   }
 }
 
-/* Radar via RainViewer — keep iframe with graceful fallback */
-async function loadRadar(lat, lon) {
-  const url = `https://www.rainviewer.com/weather-radar-map-live.html?x=${lon}&y=${lat}&z=7`;
-  const iframe = document.getElementById("radar");
-  const openBtn = document.getElementById("openRadar");
-
-  // Always wire the open button
-  openBtn.onclick = () => window.open(url, "_blank");
-
-  // Try to load; if browser blocks, show message under the iframe area
-  iframe.src = url;
-
-  // Attach handlers once
-  if (!iframe._wired) {
-    iframe._wired = true;
-    iframe.addEventListener("load", () => {
-      // Loaded or at least attempted; we still set updated stamp
-      setUpdated("updated-radar");
-    });
-    iframe.addEventListener("error", () => {
-      // Show a fallback message if the iframe errors
-      addRadarFallback();
-      showOffline("⚠️ Radar embed blocked by browser");
-    });
-  }
-
-  // Timeout fallback (some browsers don't fire onerror for X-Frame-Options)
-  setTimeout(() => {
-    // If document inside iframe is inaccessible, show fallback
-    try {
-      // Accessing iframe.contentDocument may throw if blocked
-      const doc = iframe.contentDocument;
-      if (!doc) addRadarFallback();
-    } catch {
-      addRadarFallback();
-    }
-    setUpdated("updated-radar");
-  }, 2000);
-
-  function addRadarFallback() {
-    let fb = document.querySelector(".radar-fallback");
-    if (!fb) {
-      fb = document.createElement("div");
-      fb.className = "radar-fallback";
-      fb.textContent = "Radar preview may be blocked by your browser. Use 'Open full radar' to view.";
-      iframe.parentElement.appendChild(fb);
-    }
-  }
-}
-
 /* USGS water gauges (legacy service with robust fallback) */
 async function loadWater(lat, lon) {
   try {
     const status = document.getElementById("water-status");
     status.textContent = "Finding nearby gauges…";
 
-    // Nearby stream sites (ST = stream)
     const siteUrl = `https://waterservices.usgs.gov/nwis/site/?format=json&lat=${lat}&lon=${lon}&radius=40&siteType=ST&hasDataTypeCd=iv`;
     const siteRes = await fetch(siteUrl);
     if (!siteRes.ok) throw new Error("site search failed");
@@ -370,6 +347,82 @@ async function loadWater(lat, lon) {
   }
 }
 
+/* Map helpers */
+function addCenterMarker(lat, lon) {
+  // Remove existing marker layer if present
+  if (map.getSource("center-point")) {
+    map.removeLayer("center-point-layer");
+    map.removeSource("center-point");
+  }
+  map.addSource("center-point", { type: "geojson", data: { type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] } } });
+  map.addLayer({
+    id: "center-point-layer",
+    type: "circle",
+    source: "center-point",
+    paint: { "circle-radius": 6, "circle-color": "#5dd2ff", "circle-stroke-width": 2, "circle-stroke-color": "#0b0f14" }
+  });
+}
+
+async function addMpingLayer(lat, lon) {
+  if (!MPING_TOKEN) {
+    showOffline("mPING disabled: no API token");
+    return;
+  }
+  const bbox = computeBbox(lat, lon, 2.0); // ~2 deg box
+  const url = `https://mping.ou.edu/api/mping/api/v2/reports?in_bbox=${bbox}&obtime_gte=${isoMinusHours(6)}`;
+  const res = await fetch(url, { headers: { Authorization: `Token ${MPING_TOKEN}` } });
+  if (!res.ok) throw new Error("mPING fetch failed");
+  const json = await res.json();
+
+  const features = (json || []).map(r => ({
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [r.longitude, r.latitude] },
+    properties: { category: r.category, description: r.description }
+  }));
+
+  const geojson = { type: "FeatureCollection", features };
+
+  if (map.getSource("mping")) {
+    map.getSource("mping").setData(geojson);
+  } else {
+    map.addSource("mping", { type: "geojson", data: geojson });
+    map.addLayer({
+      id: "mping-layer",
+      type: "circle",
+      source: "mping",
+      paint: {
+        "circle-radius": 5,
+        "circle-color": [
+          "match",
+          ["get", "category"],
+          "hail", "#ffb300",
+          "snow", "#8ab4f8",
+          "rain", "#00c853",
+          "freezing_rain", "#e91e63",
+          "sleet", "#9c27b0",
+          /* other */ "#9bffb5"
+        ],
+        "circle-stroke-width": 1,
+        "circle-stroke-color": "#0b0f14"
+      }
+    });
+    map.on("click", "mping-layer", (e) => {
+      const p = e.features[0].properties;
+      new mapboxgl.Popup()
+        .setLngLat(e.lngLat)
+        .setHTML(`<strong>${p.category}</strong><br>${p.description}`)
+        .addTo(map);
+    });
+    map.on("mouseenter", "mping-layer", () => map.getCanvas().style.cursor = "pointer");
+    map.on("mouseleave", "mping-layer", () => map.getCanvas().style.cursor = "");
+  }
+}
+
+function removeMpingLayer() {
+  if (map.getLayer("mping-layer")) map.removeLayer("mping-layer");
+  if (map.getSource("mping")) map.removeSource("mping");
+}
+
 /* USGS helpers */
 function extractSitesFromJson(json) {
   const arr = json?.value?.site ?? [];
@@ -407,11 +460,7 @@ function reRenderUnits() {
 }
 
 /* UI helpers */
-function showCard(el) {
-  el.classList.remove("hidden");
-  el.classList.add("show");
-}
-
+function showCard(el) { el.classList.remove("hidden"); el.classList.add("show"); }
 function showError(msg) {
   showCard(nowCard);
   document.getElementById("nowTemp").textContent = `--°`;
@@ -436,30 +485,16 @@ function clearOffline() {
   banner.classList.add("hidden");
 }
 
-/* Weather code mapping */
+/* Weather code mapping and icons */
 function codeToSummary(code) {
   const map = {
-    0: "Clear sky",
-    1: "Mainly clear",
-    2: "Partly cloudy",
-    3: "Overcast",
-    45: "Fog",
-    48: "Depositing rime fog",
-    51: "Light drizzle",
-    53: "Moderate drizzle",
-    55: "Dense drizzle",
-    61: "Light rain",
-    63: "Moderate rain",
-    65: "Heavy rain",
-    71: "Light snow",
-    73: "Moderate snow",
-    75: "Heavy snow",
-    80: "Rain showers",
-    81: "Rain showers",
-    82: "Violent rain showers",
-    95: "Thunderstorm",
-    96: "Thunderstorm (hail)",
-    99: "Thunderstorm (heavy hail)"
+    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Fog", 48: "Depositing rime fog",
+    51: "Light drizzle", 53: "Moderate drizzle", 55: "Dense drizzle",
+    61: "Light rain", 63: "Moderate rain", 65: "Heavy rain",
+    71: "Light snow", 73: "Moderate snow", 75: "Heavy snow",
+    80: "Rain showers", 81: "Rain showers", 82: "Violent rain showers",
+    95: "Thunderstorm", 96: "Thunderstorm (hail)", 99: "Thunderstorm (heavy hail)"
   };
   return map[code] ?? "—";
 }
@@ -478,17 +513,12 @@ function setIconTheme(code) {
   const sun = document.querySelector(".icon-sun");
   const cloud = document.querySelector(".icon-cloud");
   if (!sun || !cloud) return;
+  sun.style.filter = ""; cloud.style.filter = "";
 
-  sun.style.filter = "";
-  cloud.style.filter = "";
-
-  if ([0,1].includes(code)) {
-    sun.style.opacity = "1"; cloud.style.opacity = "0.15";
-  } else if ([2].includes(code)) {
-    sun.style.opacity = "0.9"; cloud.style.opacity = "0.6";
-  } else if ([3,45,48].includes(code)) {
-    sun.style.opacity = "0.25"; cloud.style.opacity = "0.95";
-  } else if ([51,53,55,61,63,65,80,81,82].includes(code)) {
+  if ([0,1].includes(code)) { sun.style.opacity = "1"; cloud.style.opacity = "0.15"; }
+  else if ([2].includes(code)) { sun.style.opacity = "0.9"; cloud.style.opacity = "0.6"; }
+  else if ([3,45,48].includes(code)) { sun.style.opacity = "0.25"; cloud.style.opacity = "0.95"; }
+  else if ([51,53,55,61,63,65,80,81,82].includes(code)) {
     sun.style.opacity = "0.2"; cloud.style.opacity = "1";
     cloud.style.filter = "drop-shadow(0 6px 20px rgba(110,140,170,0.45))";
   } else if ([71,73,75].includes(code)) {
@@ -502,67 +532,13 @@ function setIconTheme(code) {
 /* Conversions */
 function cToF(c) { return (c * 9) / 5 + 32; }
 function fToC(f) { return (f - 32) * 5 / 9; }
-function msToMph(ms) { return ms * 2.23694; }
 
-/* Weather code mapping */
-function codeToSummary(code) {
-  const map = {
-    0: "Clear sky",
-    1: "Mainly clear",
-    2: "Partly cloudy",
-    3: "Overcast",
-    45: "Fog",
-    48: "Depositing rime fog",
-    51: "Light drizzle",
-    53: "Moderate drizzle",
-    55: "Dense drizzle",
-    61: "Light rain",
-    63: "Moderate rain",
-    65: "Heavy rain",
-    71: "Light snow",
-    73: "Moderate snow",
-    75: "Heavy snow",
-    80: "Rain showers",
-    81: "Rain showers",
-    82: "Violent rain showers",
-    95: "Thunderstorm",
-    96: "Thunderstorm (hail)",
-    99: "Thunderstorm (heavy hail)"
-  };
-  return map[code] ?? "—";
+/* Util */
+function computeBbox(lat, lon, deg = 1.0) {
+  const minLon = lon - deg, minLat = lat - deg, maxLon = lon + deg, maxLat = lat + deg;
+  return `${minLon},${minLat},${maxLon},${maxLat}`;
 }
-
-function codeToEmoji(code) {
-  if ([0,1].includes(code)) return "☀️";
-  if ([2].includes(code)) return "🌤️";
-  if ([3,45,48].includes(code)) return "☁️";
-  if ([51,53,55,61,63,65,80,81,82].includes(code)) return "🌧️";
-  if ([71,73,75].includes(code)) return "❄️";
-  if ([95,96,99].includes(code)) return "⛈️";
-  return "🌡️";
-}
-
-function setIconTheme(code) {
-  const sun = document.querySelector(".icon-sun");
-  const cloud = document.querySelector(".icon-cloud");
-  if (!sun || !cloud) return;
-
-  sun.style.filter = "";
-  cloud.style.filter = "";
-
-  if ([0,1].includes(code)) {
-    sun.style.opacity = "1"; cloud.style.opacity = "0.15";
-  } else if ([2].includes(code)) {
-    sun.style.opacity = "0.9"; cloud.style.opacity = "0.6";
-  } else if ([3,45,48].includes(code)) {
-    sun.style.opacity = "0.25"; cloud.style.opacity = "0.95";
-  } else if ([51,53,55,61,63,65,80,81,82].includes(code)) {
-    sun.style.opacity = "0.2"; cloud.style.opacity = "1";
-    cloud.style.filter = "drop-shadow(0 6px 20px rgba(110,140,170,0.45))";
-  } else if ([71,73,75].includes(code)) {
-    sun.style.opacity = "0.2"; cloud.style.opacity = "1";
-  } else if ([95,96,99].includes(code)) {
-    sun.style.opacity = "0.15"; cloud.style.opacity = "1";
-    cloud.style.filter = "drop-shadow(0 6px 24px rgba(150,110,170,0.5))";
-  }
+function isoMinusHours(h) {
+  const d = new Date(Date.now() - h * 3600 * 1000);
+  return d.toISOString().split(".")[0] + "Z";
 }
