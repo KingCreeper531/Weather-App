@@ -1,13 +1,12 @@
 // ================================
-//  API KEYS
+//  API KEYS & CONFIG
 // ================================
 const TOMORROW_API = "SxfCeG33LbiKBLlR5iEegtxw5aXnZEOr";
 const MAPBOX_KEY = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2aTlqeTN5OSJ9.QYtnuhdixR4SGxLQldE9PA";
 
-// Default location
+// Default location (Boston)
 let lat = 42.3478;
 let lon = -71.0466;
-
 
 // ================================
 //  WEATHER CODE TRANSLATION
@@ -40,9 +39,8 @@ const weatherText = {
     8000: "Thunderstorm"
 };
 
-
 // ================================
-//  MAPBOX MAP INIT
+//  MAPBOX MAP INITIALIZATION
 // ================================
 mapboxgl.accessToken = MAPBOX_KEY;
 
@@ -53,27 +51,35 @@ const map = new mapboxgl.Map({
     zoom: 9
 });
 
-map.on("load", () => {
-    // Tomorrow.io weather tile layer
-    map.addSource("weatherRadar", {
-        type: "raster",
-        tiles: [
-            `https://api.tomorrow.io/v4/map/tile/temperature/{z}/{x}/{y}.png?apikey=${TOMORROW_API}`
-        ],
-        tileSize: 256
-    });
-
-    map.addLayer({
-        id: "weatherRadarLayer",
-        type: "raster",
-        source: "weatherRadar",
-        paint: { "raster-opacity": 0.7 }
-    });
-});
-
+const RASTER_SOURCE = "weatherRadar";
+const RASTER_LAYER = "weatherRadarLayer";
 
 // ================================
-//  REALTIME WEATHER
+//  MAP OVERLAY FUNCTIONS
+// ================================
+function updateOverlay(dataField) {
+    const tileURL = `https://api.tomorrow.io/v4/map/tile/{z}/{x}/{y}/${dataField}/now.png?apikey=${TOMORROW_API}`;
+
+    if (map.getSource(RASTER_SOURCE)) {
+        map.getSource(RASTER_SOURCE).setTiles([tileURL]);
+    } else {
+        map.addSource(RASTER_SOURCE, {
+            type: "raster",
+            tiles: [tileURL],
+            tileSize: 256
+        });
+
+        map.addLayer({
+            id: RASTER_LAYER,
+            type: "raster",
+            source: RASTER_SOURCE,
+            paint: { "raster-opacity": 0.7 }
+        });
+    }
+}
+
+// ================================
+//  WEATHER API FUNCTIONS
 // ================================
 async function getRealtime() {
     try {
@@ -89,15 +95,11 @@ async function getRealtime() {
             weatherText[code] || `Code: ${code}`;
 
     } catch (err) {
-        console.error(err);
-        document.getElementById("conditions").textContent = "Error loading realtime weather";
+        console.error("Realtime weather error:", err);
+        document.getElementById("conditions").textContent = "Error loading weather";
     }
 }
 
-
-// ================================
-//  FORECAST
-// ================================
 async function getForecast() {
     try {
         const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${TOMORROW_API}`;
@@ -107,108 +109,131 @@ async function getForecast() {
         const list = document.getElementById("forecast");
         list.innerHTML = "";
 
-        data.timelines.daily.forEach(day => {
+        // Show 5 days of forecast
+        data.timelines.daily.slice(0, 5).forEach(day => {
             const li = document.createElement("li");
-            li.textContent =
-                `${day.time.split("T")[0]} — ${Math.round(day.values.temperatureMax)}° / ${Math.round(day.values.temperatureMin)}°`;
+            const date = new Date(day.time).toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+            
+            li.innerHTML = `
+                <span>${date}</span>
+                <span>${Math.round(day.values.temperatureMax)}° / ${Math.round(day.values.temperatureMin)}°</span>
+            `;
             list.appendChild(li);
         });
 
     } catch (err) {
-        console.error(err);
+        console.error("Forecast error:", err);
+        document.getElementById("forecast").innerHTML = '<li class="loading">Error loading forecast</li>';
     }
 }
 
-
-// ================================
-//  RECENT HISTORY
-// ================================
 async function getHistory() {
     try {
         const url = `https://api.tomorrow.io/v4/weather/history/recent?location=${lat},${lon}&apikey=${TOMORROW_API}`;
         const res = await fetch(url);
         const data = await res.json();
 
-        document.getElementById("history").textContent =
-            `Recent temp: ${Math.round(data.data[0].values.temperature)}°C`;
+        if (data.data && data.data.length > 0) {
+            document.getElementById("history").textContent =
+                `Recent: ${Math.round(data.data[0].values.temperature)}°C`;
+        } else {
+            document.getElementById("history").textContent = "No recent history available";
+        }
 
     } catch (err) {
-        console.error(err);
-        document.getElementById("history").textContent = "History load error";
+        console.error("History error:", err);
+        document.getElementById("history").textContent = "History unavailable";
     }
 }
 
+// ================================
+//  LOCATION UPDATE FUNCTIONS
+// ================================
+function updateLocation(newLat, newLon) {
+    lat = newLat;
+    lon = newLon;
+    map.setCenter([lon, lat]);
+    document.getElementById("locationInput").value = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+    
+    // Update all weather data
+    getRealtime();
+    getForecast();
+    getHistory();
+}
 
 // ================================
-//  MANUAL LOCATION UPDATE
+//  EVENT LISTENERS
 // ================================
+
+// Map loaded
+map.on("load", () => {
+    updateOverlay("precipitationIntensity");
+    getRealtime();
+    getForecast();
+    getHistory();
+});
+
+// Map click to set location
+map.on("click", (e) => {
+    updateLocation(e.lngLat.lat, e.lngLat.lng);
+});
+
+// Overlay selector change
+document.getElementById("overlaySelect").addEventListener("change", (e) => {
+    updateOverlay(e.target.value);
+});
+
+// Manual location update
 document.getElementById("updateBtn").addEventListener("click", () => {
     const input = document.getElementById("locationInput").value;
 
     if (input.includes(",")) {
-        const [newLat, newLon] = input.split(",");
-        lat = parseFloat(newLat);
-        lon = parseFloat(newLon);
-        map.setCenter([lon, lat]);
+        const [newLat, newLon] = input.split(",").map(x => parseFloat(x.trim()));
+        if (!isNaN(newLat) && !isNaN(newLon)) {
+            updateLocation(newLat, newLon);
+        } else {
+            alert("Please enter valid coordinates (e.g., 42.3478,-71.0466)");
+        }
+    } else {
+        alert("Please enter coordinates in format: latitude,longitude");
     }
-
-    getRealtime();
-    getForecast();
-    getHistory();
 });
 
-
-// ================================
-//  CLICK MAP TO SET LOCATION
-// ================================
-map.on("click", (e) => {
-    lat = e.lngLat.lat;
-    lon = e.lngLat.lng;
-    map.setCenter([lon, lat]);
-
-    getRealtime();
-    getForecast();
-    getHistory();
-});
-
-
-// ================================
-//  USE DEVICE LOCATION (button optional)
-// ================================
-function useMyLocation() {
+// Use device location
+document.getElementById("myLocationBtn").addEventListener("click", () => {
     if (!navigator.geolocation) {
-        alert("Your browser does not support location.");
+        alert("Your browser does not support location services.");
         return;
     }
 
-    navigator.geolocation.getCurrentPosition(pos => {
-        lat = pos.coords.latitude;
-        lon = pos.coords.longitude;
-        map.setCenter([lon, lat]);
-
-        getRealtime();
-        getForecast();
-        getHistory();
-    });
-}
-
-const geoBtn = document.getElementById("myLocationBtn");
-if (geoBtn) geoBtn.addEventListener("click", useMyLocation);
-
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            updateLocation(position.coords.latitude, position.coords.longitude);
+        },
+        (error) => {
+            console.error("Geolocation error:", error);
+            alert("Unable to get your location. Please check your browser permissions.");
+        }
+    );
+});
 
 // ================================
-//  AUTO REFRESH EVERY 60 SECONDS
+//  AUTO REFRESH
 // ================================
 setInterval(() => {
     getRealtime();
     getForecast();
     getHistory();
-}, 60000);
-
+}, 300000); // Refresh every 5 minutes
 
 // ================================
-//  INITIAL LOAD
+//  INITIALIZATION
 // ================================
-getRealtime();
-getForecast();
-getHistory();
+document.getElementById("locationInput").value = `${lat},${lon}`;
+
+// Optional: Show debug output (uncomment to enable)
+// document.querySelector('.debug-section').style.display = 'block';

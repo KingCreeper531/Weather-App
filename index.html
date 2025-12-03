@@ -4,138 +4,80 @@
   <meta charset="utf-8" />
   <title>Weather Dashboard — Tomorrow.io + Mapbox</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    html,body { height:100%; margin:0; font-family: Arial, sans-serif; }
-    #map { position: absolute; top:0; bottom:0; width:100%; }
-    #panel {
-      position: absolute; right:12px; top:12px; width:350px;
-      background: rgba(255,255,255,0.95); padding:12px; border-radius:8px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-      max-height: 80vh; overflow:auto;
-    }
-    button { margin:4px 0; width:100%; padding:8px; }
-    pre { background:#f7f7f7; padding:8px; border-radius:6px; font-size:13px; }
-  </style>
-
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
   <!-- Mapbox GL JS -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  
+  <!-- Local CSS -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div id="map"></div>
+<div class="container">
+  <div id="map"></div>
 
-<div id="panel">
-  <h3>Weather Dashboard</h3>
-  
-  <input id="locInput" placeholder="lat,lng (e.g., 42.3478,-71.0466)" />
+  <div id="panel">
+    <!-- Header -->
+    <div class="header">
+      <h1>Weather Dashboard</h1>
+      <p>Real-time weather data powered by Tomorrow.io</p>
+    </div>
 
-  <button id="btnRealtime">Get Realtime</button>
-  <button id="btnForecast">Get Forecast</button>
-  <button id="btnHistory">Get Recent History</button>
+    <!-- Location Input -->
+    <div class="location-section">
+      <h3>Location</h3>
+      <input id="locationInput" placeholder="lat,lng (e.g., 42.3478,-71.0466)" />
+      <div class="button-group">
+        <button id="myLocationBtn">My Location</button>
+        <button id="updateBtn" class="secondary">Update</button>
+      </div>
+    </div>
 
-  <h4>Response:</h4>
-  <pre id="output">No data yet</pre>
+    <!-- Current Weather -->
+    <div class="weather-section">
+      <h3>Current Weather</h3>
+      <div class="weather-card">
+        <div class="weather-main">
+          <div>
+            <div id="temp" class="temperature">--°</div>
+            <div id="conditions" class="conditions">Loading...</div>
+          </div>
+        </div>
+        <div id="history" class="history-info">Loading recent data...</div>
+      </div>
+    </div>
 
-  <h4>Overlay:</h4>
-  <select id="overlaySelect">
-    <option value="precipitationIntensity">Precipitation</option>
-    <option value="temperature">Temperature</option>
-    <option value="windSpeed">Wind Speed</option>
-    <option value="cloudCover">Cloud Cover</option>
-  </select>
+    <!-- Forecast -->
+    <div class="weather-section">
+      <h3>5-Day Forecast</h3>
+      <ul id="forecast" class="forecast-list">
+        <li class="loading">Loading forecast...</li>
+      </ul>
+    </div>
+
+    <!-- Map Overlay Controls -->
+    <div class="overlay-section">
+      <h3>Map Overlay</h3>
+      <select id="overlaySelect">
+        <option value="precipitationIntensity">Precipitation</option>
+        <option value="temperature">Temperature</option>
+        <option value="windSpeed">Wind Speed</option>
+        <option value="cloudCover">Cloud Cover</option>
+      </select>
+    </div>
+
+    <!-- API Response Debug (Optional) -->
+    <div class="debug-section" style="display: none;">
+      <h3>Debug Response</h3>
+      <pre id="output">No data yet</pre>
+    </div>
+  </div>
 </div>
 
-<script>
-  // ==== CONFIG ====
-  const TOMORROW_KEY = "SxfCeG33LbiKBLlR5iEegtxw5aXnZEOr";  // your API key
-  const MAPBOX_TOKEN = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2aTlqeTN5OSJ9.QYtnuhdixR4SGxLQldE9PA";
+<!-- Local JavaScript -->
+<script src="script.js"></script>
 
-  mapboxgl.accessToken = MAPBOX_TOKEN;
-
-  // ==== MAP ====
-  const map = new mapboxgl.Map({
-    container: "map",
-    style: "mapbox://styles/mapbox/light-v11",
-    center: [-71.0466, 42.3478],
-    zoom: 10
-  });
-
-  const RASTER_SOURCE = "tomorrow-weather";
-  const RASTER_LAYER = "tomorrow-weather-layer";
-
-  function updateOverlay(dataField) {
-    const ts = "now"; // you can make this dynamic later
-    const tileURL = `https://api.tomorrow.io/v4/map/tile/{z}/{x}/{y}/${dataField}/${ts}.png?apikey=${TOMORROW_KEY}`;
-
-    if (map.getSource(RASTER_SOURCE)) {
-      map.getSource(RASTER_SOURCE).setTiles([tileURL]);
-    } else {
-      map.addSource(RASTER_SOURCE, {
-        type: "raster",
-        tiles: [tileURL],
-        tileSize: 256
-      });
-
-      map.addLayer({
-        id: RASTER_LAYER,
-        type: "raster",
-        source: RASTER_SOURCE,
-        paint: { "raster-opacity": 0.7 }
-      });
-    }
-  }
-
-  map.on("load", () => {
-    updateOverlay("precipitationIntensity");
-  });
-
-  document.getElementById("overlaySelect").onchange = e => {
-    updateOverlay(e.target.value);
-  };
-
-  // ==== API CALLS ====
-
-  function fetchRealtime(lat, lng) {
-    return fetch(`https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lng}&apikey=${TOMORROW_KEY}`)
-      .then(res => res.json());
-  }
-
-  function fetchForecast(lat, lng) {
-    return fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lng}&apikey=${TOMORROW_KEY}`)
-      .then(res => res.json());
-  }
-
-  function fetchHistory(lat, lng) {
-    return fetch(`https://api.tomorrow.io/v4/weather/history/recent?location=${lat},${lng}&apikey=${TOMORROW_KEY}`)
-      .then(res => res.json());
-  }
-
-  function showOutput(obj) {
-    document.getElementById("output").innerText = JSON.stringify(obj, null, 2);
-  }
-
-  // ==== BUTTONS ====
-  document.getElementById("btnRealtime").onclick = () => {
-    const v = document.getElementById("locInput").value;
-    const [lat, lng] = v.split(",").map(x => parseFloat(x.trim()));
-    fetchRealtime(lat, lng).then(showOutput);
-  };
-
-  document.getElementById("btnForecast").onclick = () => {
-    const v = document.getElementById("locInput").value;
-    const [lat, lng] = v.split(",").map(x => parseFloat(x.trim()));
-    fetchForecast(lat, lng).then(showOutput);
-  };
-
-  document.getElementById("btnHistory").onclick = () => {
-    const v = document.getElementById("locInput").value;
-    const [lat, lng] = v.split(",").map(x => parseFloat(x.trim()));
-    fetchHistory(lat, lng).then(showOutput);
-  };
-
-  // initialize input
-  document.getElementById("locInput").value = "42.3478,-71.0466";
-</script>
 </body>
 </html>
