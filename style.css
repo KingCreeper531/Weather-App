@@ -68,6 +68,39 @@ html, body {
 }
 
 /* ============================
+   DATA STATUS
+============================ */
+.data-status {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(15px);
+    border-radius: 8px;
+    padding: 8px 12px;
+    z-index: 999;
+    display: flex;
+    gap: 12px;
+    font-size: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.data-status span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+#radarStatus {
+    color: #00ff88;
+    font-weight: 600;
+}
+
+#lastUpdate {
+    color: #999;
+}
+
+/* ============================
    SEARCH BAR
 ============================ */
 .search-container {
@@ -259,10 +292,10 @@ html, body {
 ============================ */
 .weather-panel {
     position: absolute;
-    top: 20px;
+    top: 70px;
     left: 20px;
     width: 380px;
-    max-height: calc(100vh - 40px);
+    max-height: calc(100vh - 90px);
     background: rgba(26, 26, 26, 0.95);
     backdrop-filter: blur(15px);
     border-radius: 16px;
@@ -274,7 +307,7 @@ html, body {
 }
 
 .weather-panel.hidden {
-    transform: translateX(-100%);
+    transform: translateX(-120%);
     opacity: 0;
 }
 
@@ -316,7 +349,7 @@ html, body {
 .panel-content {
     padding: 20px;
     overflow-y: auto;
-    max-height: calc(100vh - 120px);
+    max-height: calc(100vh - 170px);
 }
 
 .location-info {
@@ -334,6 +367,57 @@ html, body {
 
 .location-coords {
     font-size: 0.85rem;
+    color: #999;
+}
+
+/* ============================
+   WARNINGS SECTION
+============================ */
+.warnings-section {
+    margin-bottom: 20px;
+    padding: 16px;
+    background: rgba(255, 69, 0, 0.1);
+    border-left: 4px solid #ff4500;
+    border-radius: 8px;
+}
+
+.warnings-section.hidden {
+    display: none;
+}
+
+.warnings-section h4 {
+    color: #ff6b35;
+    margin-bottom: 12px;
+    font-size: 1rem;
+}
+
+.warnings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.warning-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 10px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.warning-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.warning-title {
+    font-weight: 600;
+    color: #ff6b35;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+}
+
+.warning-time {
+    font-size: 0.75rem;
     color: #999;
 }
 
@@ -366,6 +450,13 @@ html, body {
 #conditions {
     font-size: 1.1rem;
     font-weight: 500;
+}
+
+.precip-type {
+    font-size: 0.85rem;
+    color: #00ff88;
+    margin-top: 4px;
+    font-weight: 600;
 }
 
 .weather-details {
@@ -469,7 +560,7 @@ html, body {
 ============================ */
 .radar-controls {
     position: absolute;
-    bottom: 120px;
+    bottom: 140px;
     left: 20px;
     background: rgba(40, 40, 50, 0.95);
     backdrop-filter: blur(10px);
@@ -495,6 +586,13 @@ html, body {
     font-size: 0.85rem;
     color: #ccc;
     min-width: 70px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.control-group input[type="checkbox"] {
+    accent-color: #00aaff;
 }
 
 .control-group select {
@@ -508,6 +606,7 @@ html, body {
 
 .control-group input[type="range"] {
     width: 100px;
+    accent-color: #00aaff;
 }
 
 #opacityValue {
@@ -531,6 +630,7 @@ html, body {
     z-index: 1000;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
+    min-width: 180px;
 }
 
 .legend-title {
@@ -553,9 +653,10 @@ html, body {
 }
 
 .legend-color {
-    width: 16px;
-    height: 12px;
-    border-radius: 2px;
+    width: 20px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .legend-item span {
@@ -587,39 +688,123 @@ html, body {
 }
 
 /* ============================
+   WARNING POPUP STYLES
+============================ */
+.mapboxgl-popup-content {
+    background: rgba(26, 26, 26, 0.98) !important;
+    backdrop-filter: blur(15px);
+    border-radius: 12px !important;
+    padding: 16px !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    max-width: 300px;
+    color: #fff !important;
+}
+
+.mapboxgl-popup-close-button {
+    color: #fff !important;
+    font-size: 20px !important;
+    padding: 4px 8px !important;
+}
+
+.mapboxgl-popup-close-button:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.popup-warning-title {
+    font-weight: 700;
+    color: #ff6b35;
+    margin-bottom: 8px;
+    font-size: 1rem;
+}
+
+.popup-warning-desc {
+    color: #ccc;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    margin-bottom: 8px;
+}
+
+.popup-warning-time {
+    color: #999;
+    font-size: 0.75rem;
+    font-style: italic;
+}
+
+/* ============================
    RESPONSIVE DESIGN
 ============================ */
-@media (max-width: 768px) {
-    .search-container {
-        width: calc(100vw - 40px);
+@media (max-width: 1200px) {
+    .weather-panel {
+        width: 350px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .branding h1 {
+        font-size: 1.75rem;
     }
     
     .radar-animation-controls {
-        top: 80px;
-        right: 10px;
-        min-width: 250px;
+        min-width: 260px;
     }
     
     .weather-panel {
-        top: 80px;
-        left: 10px;
+        width: 340px;
+    }
+}
+
+@media (max-width: 768px) {
+    .search-container {
         width: calc(100vw - 20px);
-        max-width: 350px;
+        top: 10px;
     }
     
-    .radar-controls,
-    .radar-legend {
+    .data-status {
+        top: 65px;
+        left: 10px;
+        font-size: 0.7rem;
+        padding: 6px 10px;
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .radar-animation-controls {
+        top: 100px;
+        right: 10px;
+        min-width: 240px;
+    }
+    
+    .weather-panel {
+        top: 100px;
         left: 10px;
         right: 10px;
-        width: auto;
+        width: calc(100vw - 20px);
+        max-width: 100%;
+        max-height: calc(100vh - 110px);
     }
     
     .radar-controls {
-        bottom: 140px;
+        left: 10px;
+        right: auto;
+        width: auto;
+        max-width: calc(100vw - 20px);
+        bottom: 130px;
+    }
+    
+    .control-group {
+        flex-wrap: wrap;
+    }
+    
+    .control-group label {
+        min-width: auto;
     }
     
     .radar-legend {
-        bottom: 80px;
+        left: 10px;
+        right: auto;
+        bottom: 60px;
+        max-width: calc(100vw - 20px);
     }
     
     .branding {
@@ -633,6 +818,107 @@ html, body {
     
     .branding p {
         font-size: 0.75rem;
+    }
+    
+    #currentTemp {
+        font-size: 2.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .search-container {
+        width: calc(100vw - 20px);
+    }
+    
+    .radar-animation-controls {
+        min-width: 200px;
+        max-width: calc(100vw - 20px);
+    }
+    
+    .animation-controls {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .speed-control {
+        margin-left: 0;
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .control-btn {
+        padding: 6px 10px;
+        font-size: 0.9rem;
+    }
+    
+    .weather-panel {
+        top: 100px;
+    }
+    
+    .weather-details {
+        grid-template-columns: 1fr;
+    }
+    
+    .hourly-item {
+        min-width: 60px;
+    }
+    
+    .radar-controls {
+        bottom: 120px;
+        padding: 12px;
+    }
+    
+    .control-group {
+        margin-bottom: 10px;
+    }
+    
+    .control-group select {
+        flex: 1;
+    }
+    
+    .radar-legend {
+        bottom: 50px;
+        padding: 12px;
+    }
+    
+    .branding h1 {
+        font-size: 1.25rem;
+    }
+    
+    .branding p {
+        font-size: 0.65rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .search-bar {
+        padding: 2px;
+    }
+    
+    #searchInput {
+        padding: 10px 12px;
+        font-size: 0.85rem;
+    }
+    
+    #searchBtn {
+        padding: 10px 12px;
+    }
+    
+    .data-status {
+        font-size: 0.65rem;
+        padding: 4px 8px;
+    }
+    
+    .radar-animation-controls {
+        top: 95px;
+    }
+    
+    #currentTemp {
+        font-size: 2rem;
+    }
+    
+    .temp-details {
+        font-size: 0.85rem;
     }
 }
 
@@ -664,6 +950,23 @@ html, body {
 .hourly-container::-webkit-scrollbar-thumb:hover,
 .search-results::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 170, 255, 0.7);
+}
+
+/* ============================
+   LOADING STATES
+============================ */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.pulse {
+    animation: pulse 2s infinite;
 }
 
 /* ========================================

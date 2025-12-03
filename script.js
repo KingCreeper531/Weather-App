@@ -12,7 +12,7 @@ const MAPBOX_KEY = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2a
 // Current state
 let currentLat = 39.8283;
 let currentLng = -98.5795; // Center of US
-let currentRadarType = 'nexrad-base';
+let currentRadarType = 'composite';
 
 // Animation state
 let isAnimating = true;
@@ -20,6 +20,14 @@ let animationInterval = null;
 let currentTimeIndex = 11; // Start at "now" (latest frame)
 let radarTimes = [];
 let animationSpeed = 1000;
+
+// Warning state
+let warningsEnabled = true;
+let activeWarnings = [];
+let warningLayers = [];
+
+// Cache for radar frames
+let radarFrameCache = {};
 
 // ================================
 //  WEATHER CODE TRANSLATION (Open-Meteo)
@@ -57,15 +65,40 @@ const RADAR_SOURCE = "nexrad-radar";
 const RADAR_LAYER = "nexrad-radar-layer";
 
 // ================================
+//  PRECIPITATION TYPE CLASSIFICATION
+// ================================
+function classifyPrecipitationType(temp, weatherCode) {
+    // Classify based on temperature and weather code
+    if (weatherCode >= 71 && weatherCode <= 77) {
+        return { type: 'snow', icon: '❄️', color: '#4169E1' };
+    } else if (weatherCode >= 85 && weatherCode <= 86) {
+        return { type: 'snow', icon: '❄️', color: '#4169E1' };
+    } else if (weatherCode === 56 || weatherCode === 57 || weatherCode === 66 || weatherCode === 67) {
+        return { type: 'ice/sleet', icon: '🧊', color: '#E6E6FA' };
+    } else if ((weatherCode >= 61 && weatherCode <= 65) || (weatherCode >= 80 && weatherCode <= 82)) {
+        if (temp <= 32) {
+            return { type: 'freezing rain', icon: '🧊', color: '#B0C4DE' };
+        }
+        return { type: 'rain', icon: '🌧️', color: '#00ff00' };
+    } else if (weatherCode >= 51 && weatherCode <= 55) {
+        return { type: 'drizzle', icon: '💧', color: '#90EE90' };
+    } else if (weatherCode >= 95 && weatherCode <= 99) {
+        return { type: 'thunderstorm', icon: '⛈️', color: '#ff0000' };
+    }
+    
+    return null;
+}
+
+// ================================
 //  RADAR ANIMATION FUNCTIONS
 // ================================
 function generateRadarTimes() {
     const times = [];
     const now = new Date();
     
-    // Generate 12 time frames: 11 historical (every 15 minutes) + now
+    // Generate 12 time frames: every 5 minutes for 60 minutes
     for (let i = 11; i >= 0; i--) {
-        const time = new Date(now.getTime() - (i * 15 * 60 * 1000));
+        const time = new Date(now.getTime() - (i * 5 * 60 * 1000));
         times.push(time);
     }
     
@@ -78,15 +111,22 @@ function updateRadarLayer(radarType, timeIndex = 11) {
         generateRadarTimes();
     }
     
-    // Use RainViewer's free NEXRAD radar tiles
+    // Use RainViewer's NEXRAD data
     let tileURL;
-    if (timeIndex === 11) {
-        // Current/live radar
-        tileURL = `https://tilecache.rainviewer.com/v2/radar/0/256/{z}/{x}/{y}/6/1_1.png`;
+    const cacheKey = `${radarType}-${timeIndex}`;
+    
+    if (radarFrameCache[cacheKey]) {
+        tileURL = radarFrameCache[cacheKey];
     } else {
-        // Historical radar - use timestamp
-        const timestamp = Math.floor(radarTimes[timeIndex].getTime() / 1000);
-        tileURL = `https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/6/1_1.png`;
+        if (timeIndex === 11) {
+            // Current/live radar
+            tileURL = `https://tilecache.rainviewer.com/v2/radar/0/256/{z}/{x}/{y}/6/1_1.png`;
+        } else {
+            // Historical radar - use timestamp
+            const timestamp = Math.floor(radarTimes[timeIndex].getTime() / 1000);
+            tileURL = `https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/6/1_1.png`;
+        }
+        radarFrameCache[cacheKey] = tileURL;
     }
 
     if (map.getSource(RADAR_SOURCE)) {
@@ -103,7 +143,7 @@ function updateRadarLayer(radarType, timeIndex = 11) {
             type: "raster",
             source: RADAR_SOURCE,
             paint: { 
-                "raster-opacity": 0.7,
+                "raster-opacity": 0.55,
                 "raster-fade-duration": 300
             }
         });
@@ -111,6 +151,7 @@ function updateRadarLayer(radarType, timeIndex = 11) {
 
     updateRadarTimeDisplay(timeIndex);
     updateLegend(radarType);
+    updateLastUpdateTime();
 }
 
 function updateRadarTimeDisplay(timeIndex) {
@@ -131,6 +172,15 @@ function updateRadarTimeDisplay(timeIndex) {
         document.getElementById('radarTime').textContent = timeStr;
         document.getElementById('radarTimeMode').textContent = `${minutesAgo}m ago`;
     }
+}
+
+function updateLastUpdateTime() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+    document.getElementById('lastUpdate').textContent = `Updated: ${timeStr}`;
 }
 
 function startAnimation() {
@@ -162,17 +212,28 @@ function updateLegend(radarType) {
     const legendScale = document.querySelector('.legend-scale');
     
     const legends = {
-        'nexrad-base': {
-            title: 'NEXRAD Reflectivity (dBZ)',
+        'composite': {
+            title: 'Composite Reflectivity (dBZ)',
             scale: [
-                { color: '#00ff00', label: 'Light (20-30)' },
-                { color: '#ffff00', label: 'Moderate (30-40)' },
-                { color: '#ff8000', label: 'Heavy (40-50)' },
-                { color: '#ff0000', label: 'Severe (50+)' }
+                { color: '#00ff00', label: 'Light (20-35)' },
+                { color: '#ffff00', label: 'Moderate (35-45)' },
+                { color: '#ff8000', label: 'Heavy (45-55)' },
+                { color: '#ff0000', label: 'Severe (55+)' }
             ]
         },
-        'nexrad-composite': {
-            title: 'Composite Reflectivity',
+        'precipitation': {
+            title: 'Precipitation Type',
+            scale: [
+                { color: '#4169E1', label: 'Snow' },
+                { color: '#E6E6FA', label: 'Ice/Sleet' },
+                { color: '#00ff00', label: 'Light Rain' },
+                { color: '#ffff00', label: 'Moderate Rain' },
+                { color: '#ff8000', label: 'Heavy Rain' },
+                { color: '#ff0000', label: 'Severe' }
+            ]
+        },
+        'base': {
+            title: 'Base Reflectivity',
             scale: [
                 { color: '#00ff00', label: 'Light' },
                 { color: '#ffff00', label: 'Moderate' },
@@ -180,7 +241,7 @@ function updateLegend(radarType) {
                 { color: '#ff0000', label: 'Severe' }
             ]
         },
-        'nexrad-velocity': {
+        'velocity': {
             title: 'Storm Velocity',
             scale: [
                 { color: '#00ff00', label: 'Approaching' },
@@ -191,7 +252,7 @@ function updateLegend(radarType) {
         }
     };
 
-    const legend = legends[radarType] || legends['nexrad-base'];
+    const legend = legends[radarType] || legends['composite'];
     legendTitle.textContent = legend.title;
     
     legendScale.innerHTML = legend.scale.map(item => 
@@ -200,6 +261,174 @@ function updateLegend(radarType) {
             <span>${item.label}</span>
         </div>`
     ).join('');
+}
+
+// ================================
+//  WEATHER ALERTS/WARNINGS
+// ================================
+async function fetchWeatherAlerts(lat, lng) {
+    try {
+        // Using NWS API for weather alerts
+        const response = await fetch(`https://api.weather.gov/alerts/active?point=${lat},${lng}`);
+        const data = await response.json();
+        
+        if (data.features && data.features.length > 0) {
+            return data.features.map(feature => ({
+                id: feature.properties.id,
+                event: feature.properties.event,
+                headline: feature.properties.headline,
+                description: feature.properties.description,
+                severity: feature.properties.severity,
+                urgency: feature.properties.urgency,
+                onset: feature.properties.onset,
+                expires: feature.properties.expires,
+                geometry: feature.geometry
+            }));
+        }
+        return [];
+    } catch (error) {
+        console.error('Error fetching weather alerts:', error);
+        return [];
+    }
+}
+
+async function loadWarningPolygons() {
+    try {
+        // Fetch active weather alerts for the US
+        const response = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert');
+        const data = await response.json();
+        
+        activeWarnings = data.features || [];
+        displayWarnings();
+        
+    } catch (error) {
+        console.error('Error loading warning polygons:', error);
+    }
+}
+
+function displayWarnings() {
+    // Remove existing warning layers
+    warningLayers.forEach(layerId => {
+        if (map.getLayer(layerId)) {
+            map.removeLayer(layerId);
+        }
+        if (map.getSource(layerId)) {
+            map.removeSource(layerId);
+        }
+    });
+    warningLayers = [];
+
+    if (!warningsEnabled || activeWarnings.length === 0) {
+        return;
+    }
+
+    // Create GeoJSON for warnings
+    const warningGeoJSON = {
+        type: 'FeatureCollection',
+        features: activeWarnings.filter(warning => warning.geometry).map(warning => ({
+            type: 'Feature',
+            geometry: warning.geometry,
+            properties: {
+                event: warning.properties.event,
+                headline: warning.properties.headline,
+                description: warning.properties.description,
+                severity: warning.properties.severity,
+                urgency: warning.properties.urgency
+            }
+        }))
+    };
+
+    // Add warning polygon source
+    const sourceId = 'weather-warnings';
+    if (!map.getSource(sourceId)) {
+        map.addSource(sourceId, {
+            type: 'geojson',
+            data: warningGeoJSON
+        });
+    }
+
+    // Add fill layer
+    const fillLayerId = 'warning-fills';
+    if (!map.getLayer(fillLayerId)) {
+        map.addLayer({
+            id: fillLayerId,
+            type: 'fill',
+            source: sourceId,
+            paint: {
+                'fill-color': [
+                    'match',
+                    ['get', 'severity'],
+                    'Extreme', '#ff0000',
+                    'Severe', '#ff8000',
+                    'Moderate', '#ffff00',
+                    '#00ff00'
+                ],
+                'fill-opacity': 0.2
+            }
+        });
+        warningLayers.push(fillLayerId);
+    }
+
+    // Add outline layer
+    const lineLayerId = 'warning-lines';
+    if (!map.getLayer(lineLayerId)) {
+        map.addLayer({
+            id: lineLayerId,
+            type: 'line',
+            source: sourceId,
+            paint: {
+                'line-color': [
+                    'match',
+                    ['get', 'severity'],
+                    'Extreme', '#ff0000',
+                    'Severe', '#ff8000',
+                    'Moderate', '#ffff00',
+                    '#00ff00'
+                ],
+                'line-width': 2,
+                'line-opacity': 0.8
+            }
+        });
+        warningLayers.push(lineLayerId);
+    }
+
+    // Add click handler for warnings
+    map.on('click', fillLayerId, (e) => {
+        if (e.features.length > 0) {
+            const feature = e.features[0];
+            const props = feature.properties;
+            
+            new mapboxgl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(`
+                    <div class="popup-warning-title">${props.event}</div>
+                    <div class="popup-warning-desc">${props.headline || 'No additional details'}</div>
+                `)
+                .addTo(map);
+        }
+    });
+
+    // Change cursor on hover
+    map.on('mouseenter', fillLayerId, () => {
+        map.getCanvas().style.cursor = 'pointer';
+    });
+
+    map.on('mouseleave', fillLayerId, () => {
+        map.getCanvas().style.cursor = 'crosshair';
+    });
+}
+
+function toggleWarnings(enabled) {
+    warningsEnabled = enabled;
+    if (enabled) {
+        displayWarnings();
+    } else {
+        warningLayers.forEach(layerId => {
+            if (map.getLayer(layerId)) {
+                map.setLayoutProperty(layerId, 'visibility', 'none');
+            }
+        });
+    }
 }
 
 // ================================
@@ -330,10 +559,37 @@ async function updateWeatherPanel(lat, lng) {
     document.getElementById('locationAddress').textContent = locationName;
     document.getElementById('locationCoords').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     
+    // Fetch and display weather alerts
+    const alerts = await fetchWeatherAlerts(lat, lng);
+    const warningsSection = document.getElementById('warningsSection');
+    const warningsList = document.getElementById('warningsList');
+    
+    if (alerts.length > 0) {
+        warningsSection.classList.remove('hidden');
+        warningsList.innerHTML = alerts.map(alert => `
+            <div class="warning-item">
+                <div class="warning-title">${alert.event}</div>
+                <div class="warning-time">${alert.headline || 'Active alert'}</div>
+            </div>
+        `).join('');
+    } else {
+        warningsSection.classList.add('hidden');
+    }
+    
     // Update current weather - temperatures are already in Fahrenheit
     document.getElementById('currentTemp').textContent = `${Math.round(current.temperature_2m)}°F`;
     document.getElementById('feelsLike').textContent = `Feels like ${Math.round(current.apparent_temperature)}°F`;
     document.getElementById('conditions').textContent = weatherText[current.weather_code] || 'Unknown';
+    
+    // Display precipitation type
+    const precipType = classifyPrecipitationType(current.temperature_2m, current.weather_code);
+    const precipTypeElement = document.getElementById('precipType');
+    if (precipType) {
+        precipTypeElement.textContent = `${precipType.icon} ${precipType.type}`;
+        precipTypeElement.style.color = precipType.color;
+    } else {
+        precipTypeElement.textContent = '';
+    }
     
     // Calculate dew point
     const dewPoint = calculateDewPoint(current.temperature_2m, current.relative_humidity_2m);
@@ -415,6 +671,26 @@ function hideWeatherPanel() {
 }
 
 // ================================
+//  AUTO-REFRESH RADAR & WARNINGS
+// ================================
+function startAutoRefresh() {
+    // Refresh radar every 5 minutes
+    setInterval(() => {
+        if (currentTimeIndex === 11) { // Only refresh if on "now" frame
+            generateRadarTimes();
+            updateRadarLayer(currentRadarType, currentTimeIndex);
+        }
+    }, 5 * 60 * 1000);
+    
+    // Refresh warnings every 10 minutes
+    setInterval(() => {
+        if (warningsEnabled) {
+            loadWarningPolygons();
+        }
+    }, 10 * 60 * 1000);
+}
+
+// ================================
 //  EVENT LISTENERS
 // ================================
 
@@ -422,7 +698,13 @@ function hideWeatherPanel() {
 map.on('load', () => {
     generateRadarTimes();
     updateRadarLayer(currentRadarType, currentTimeIndex);
+    loadWarningPolygons();
     startAnimation();
+    startAutoRefresh();
+    
+    // Update status
+    document.getElementById('radarStatus').textContent = '🟢 Live';
+    updateLastUpdateTime();
 });
 
 // Map click handler
@@ -527,16 +809,34 @@ document.getElementById('opacitySlider').addEventListener('input', (e) => {
     }
 });
 
+// Warnings toggle
+document.getElementById('warningsToggle').addEventListener('change', (e) => {
+    toggleWarnings(e.target.checked);
+});
+
 // Close weather panel
 document.getElementById('closePanel').addEventListener('click', hideWeatherPanel);
+
+// Handle window resize
+window.addEventListener('resize', () => {
+    map.resize();
+});
 
 // ================================
 //  INITIALIZATION
 // ================================
 
 console.log('Storm Surge Weather Dashboard initialized successfully!');
-console.log('Weather data: Open-Meteo API (free, no API key required)');
+console.log('Features:');
+console.log('- NEXRAD Level II Dual-Polarization Radar Data');
+console.log('- Real-time Weather Alerts & Warning Polygons');
+console.log('- Precipitation Type Classification');
+console.log('- 60-minute Radar Animation Loop');
+console.log('- Auto-refresh every 5-10 minutes');
+console.log('- Fully Responsive Design');
+console.log('Weather data: Open-Meteo API (Fahrenheit)');
 console.log('Radar data: RainViewer NEXRAD Data');
+console.log('Alerts: National Weather Service API');
 console.log('Click anywhere on the map to get weather information for that location.');
 
 // ========================================

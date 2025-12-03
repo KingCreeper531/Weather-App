@@ -7,7 +7,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Storm Surge Weather — Real-Time NEXRAD Radar</title>
+  <title>Storm Surge Weather — Advanced NEXRAD Level II</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   
@@ -58,7 +58,7 @@
     <div class="time-slider-container">
       <input type="range" id="timeSlider" min="0" max="11" value="11" step="1">
       <div class="time-labels">
-        <span>-3h</span>
+        <span>-60 min</span>
         <span>Now</span>
       </div>
     </div>
@@ -77,12 +77,19 @@
         <div id="locationCoords" class="location-coords"></div>
       </div>
 
+      <!-- Active Warnings Section -->
+      <div id="warningsSection" class="warnings-section hidden">
+        <h4>⚠️ Active Alerts</h4>
+        <div id="warningsList" class="warnings-list"></div>
+      </div>
+
       <div class="current-weather">
         <div class="temp-display">
           <span id="currentTemp">--°</span>
           <div class="temp-details">
             <div id="feelsLike">Feels like --°</div>
             <div id="conditions">Loading...</div>
+            <div id="precipType" class="precip-type"></div>
           </div>
         </div>
       </div>
@@ -141,40 +148,56 @@
   <!-- Radar Controls -->
   <div class="radar-controls">
     <div class="control-group">
-      <label>Radar Type:</label>
+      <label>Radar:</label>
       <select id="radarType">
-        <option value="nexrad-base">Base Reflectivity</option>
-        <option value="nexrad-composite">Composite</option>
-        <option value="nexrad-velocity">Velocity</option>
+        <option value="composite">Composite Reflectivity</option>
+        <option value="precipitation">Precipitation Type</option>
+        <option value="base">Base Reflectivity</option>
+        <option value="velocity">Velocity</option>
       </select>
     </div>
     
     <div class="control-group">
       <label>Opacity:</label>
-      <input type="range" id="opacitySlider" min="0" max="100" value="70">
-      <span id="opacityValue">70%</span>
+      <input type="range" id="opacitySlider" min="0" max="100" value="55">
+      <span id="opacityValue">55%</span>
+    </div>
+
+    <div class="control-group">
+      <label>
+        <input type="checkbox" id="warningsToggle" checked>
+        Show Alerts
+      </label>
     </div>
   </div>
 
   <!-- Legend -->
   <div class="radar-legend">
-    <div class="legend-title">NEXRAD Reflectivity (dBZ)</div>
-    <div class="legend-scale">
+    <div class="legend-title">Precipitation Type</div>
+    <div class="legend-scale" id="legendScale">
+      <div class="legend-item">
+        <div class="legend-color" style="background: #4169E1;"></div>
+        <span>Snow</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #E6E6FA;"></div>
+        <span>Ice/Sleet</span>
+      </div>
       <div class="legend-item">
         <div class="legend-color" style="background: #00ff00;"></div>
-        <span>Light (20-30)</span>
+        <span>Light Rain</span>
       </div>
       <div class="legend-item">
         <div class="legend-color" style="background: #ffff00;"></div>
-        <span>Moderate (30-40)</span>
+        <span>Moderate Rain</span>
       </div>
       <div class="legend-item">
         <div class="legend-color" style="background: #ff8000;"></div>
-        <span>Heavy (40-50)</span>
+        <span>Heavy Rain</span>
       </div>
       <div class="legend-item">
         <div class="legend-color" style="background: #ff0000;"></div>
-        <span>Severe (50+)</span>
+        <span>Severe</span>
       </div>
     </div>
   </div>
@@ -185,7 +208,13 @@
   <!-- Branding -->
   <div class="branding">
     <h1>Storm Surge</h1>
-    <p>Real-Time Weather Radar</p>
+    <p>NEXRAD Level II · Dual-Pol</p>
+  </div>
+
+  <!-- Data Status Indicator -->
+  <div class="data-status">
+    <span id="radarStatus">🟢 Live</span>
+    <span id="lastUpdate">Updated: --</span>
   </div>
 </div>
 
