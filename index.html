@@ -2,88 +2,73 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Storm Surge Weather</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pixel Weather</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Inter font for sleek UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <header class="ssw-header">
-    <div class="brand">
-      <div class="logo"></div>
-      <span>Storm Surge Weather</span>
-    </div>
-    <form id="search-form" autocomplete="off" class="search">
-      <input id="search-input" type="text"
-             placeholder="Enter ZIP, city, or address (e.g., 43780 or 1600 Pennsylvania Ave)"
-             aria-label="Location" />
-      <button type="submit">Get Weather</button>
-    </form>
-    <div class="header-controls">
-      <button id="unit-toggle" class="chip">°F / °C</button>
-    </div>
-  </header>
-
-  <main class="ssw-container">
-    <section class="card current">
-      <div class="card-head">
-        <h2 id="location-title">Enter a location to begin</h2>
-        <div id="updated-at" class="muted">—</div>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo-dot"></div>
+        <span class="brand-text">Pixel Weather</span>
       </div>
-      <div class="current-row">
-        <div class="dual-temp">
-          <div class="temp-primary" id="temp-f">--°F</div>
-          <div class="temp-secondary" id="temp-c">--°C</div>
-        </div>
-        <div class="conditions">
-          <div class="cond-line"><span class="icon wind"></span><span id="wind-humidity">Wind -- • Humidity --%</span></div>
-          <div class="cond-line"><span class="icon alert"></span><span id="status">No data loaded yet</span></div>
-        </div>
-        <div class="art">
-          <div class="sun"></div>
-          <div class="cloud"></div>
-        </div>
+      <div class="controls">
+        <input id="zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP code (e.g. 43780)" />
+        <button id="goBtn" class="btn">Get weather</button>
       </div>
-      <div id="alerts" class="alerts"></div>
-    </section>
+    </header>
 
-    <section class="card today">
-      <div class="card-head"><h3>Today at a glance</h3></div>
-      <div id="today-glance" class="today-body"></div>
-    </section>
-
-    <section class="card forecast">
-      <div class="card-head"><h3>7-day forecast</h3></div>
-      <div id="forecast" class="forecast-grid"></div>
-    </section>
-
-    <section class="card radar">
-      <div class="card-head">
-        <h3>Radar</h3>
-        <div class="actions">
-          <button class="chip" id="open-rainviewer">Open full radar</button>
+    <main id="content">
+      <section id="nowCard" class="card card-hero hidden">
+        <div class="hero-left">
+          <div class="temp" id="nowTemp">--°</div>
+          <div class="summary" id="nowSummary">Enter a ZIP to get started</div>
+          <div class="meta">
+            <span id="nowFeels">Feels like --°</span>
+            <span id="nowWind">Wind -- mph</span>
+            <span id="nowHum">Humidity --%</span>
+          </div>
         </div>
-      </div>
-      <iframe id="radar" title="RainViewer Radar" loading="lazy"></iframe>
-    </section>
-
-    <section class="card water">
-      <div class="card-head"><h3>Rivers and flood (nearby gauges)</h3></div>
-      <div class="water-body">
-        <div id="water-status" class="muted">Loading...</div>
-        <div id="gauges" class="gauges"></div>
-        <div class="note muted">Live USGS streamflow (cfs) and stage (ft). For inundation maps, open NOAA Water.</div>
-        <div class="actions">
-          <button class="chip" id="open-water">Open NOAA Water</button>
+        <div class="hero-right">
+          <svg id="icon" viewBox="0 0 64 64" class="weather-icon">
+            <!-- simple sun/cloud icon; replaced dynamically -->
+            <circle cx="22" cy="22" r="12" class="icon-sun"></circle>
+            <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
+          </svg>
         </div>
-      </div>
-    </section>
-  </main>
+      </section>
 
-  <footer class="ssw-footer">
-    <div>Data: NWS api.weather.gov • RainViewer • USGS Water Services • NOAA Water</div>
-    <div class="muted">User-Agent set: StormSurgeWeather (contact: stormsurgee025@gmail.com)</div>
-  </footer>
+      <section class="card hidden" id="todayGrid">
+        <h2 class="card-title">Rest of today</h2>
+        <div class="hours" id="hours"></div>
+      </section>
 
-  <script src="app.js"></script>
+      <section class="card hidden" id="radarCard">
+        <h2 class="card-title">Radar (regional)</h2>
+        <div class="radar-wrap">
+          <!-- Swap to your local WFO radar if desired -->
+          <iframe
+            title="Radar"
+            src="https://radar.weather.gov/ridge/lite/N0R/ILN_loop.gif"
+            width="600"
+            height="600"
+            loading="lazy"
+          ></iframe>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Data: Open‑Meteo (no API key; free for non‑commercial use)</span>
+      <span>Built by Jakob</span>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
