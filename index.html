@@ -18,6 +18,15 @@
 <div class="container">
   <div id="map"></div>
 
+  <!-- Search Bar -->
+  <div class="search-container">
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search city, address, or zip code..." />
+      <button id="searchBtn">🔍</button>
+    </div>
+    <div id="searchResults" class="search-results hidden"></div>
+  </div>
+
   <!-- Time Controls (NEXRAD Style) -->
   <div class="time-controls">
     <div class="time-header">
@@ -74,6 +83,11 @@
     </div>
     
     <div class="panel-content">
+      <div class="location-info">
+        <div id="locationAddress" class="location-address">Click on map for weather info</div>
+        <div id="locationCoords" class="location-coords"></div>
+      </div>
+
       <div class="current-weather">
         <div class="temp-display">
           <span id="currentTemp">--°</span>
@@ -94,6 +108,10 @@
           <span id="windSpeed" class="value">-- mph</span>
         </div>
         <div class="detail-item">
+          <span class="label">Wind Direction</span>
+          <span id="windDirection" class="value">--</span>
+        </div>
+        <div class="detail-item">
           <span class="label">Pressure</span>
           <span id="pressure" class="value">-- mb</span>
         </div>
@@ -106,8 +124,12 @@
           <span id="uvIndex" class="value">--</span>
         </div>
         <div class="detail-item">
-          <span class="label">Precipitation</span>
-          <span id="precipitation" class="value">-- in</span>
+          <span class="label">Dew Point</span>
+          <span id="dewPoint" class="value">--°</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Cloud Cover</span>
+          <span id="cloudCover" class="value">--%</span>
         </div>
       </div>
       
@@ -115,6 +137,13 @@
         <h4>24-Hour Forecast</h4>
         <div id="hourlyData" class="hourly-container">
           Loading hourly data...
+        </div>
+      </div>
+
+      <div class="daily-forecast">
+        <h4>7-Day Forecast</h4>
+        <div id="dailyData" class="daily-container">
+          Loading daily forecast...
         </div>
       </div>
     </div>
@@ -129,6 +158,8 @@
         <option value="temperature">Temperature</option>
         <option value="windSpeed">Wind Speed</option>
         <option value="cloudCover">Cloud Cover</option>
+        <option value="humidity">Humidity</option>
+        <option value="pressure">Pressure</option>
       </select>
     </div>
     
@@ -136,6 +167,10 @@
       <label>Opacity:</label>
       <input type="range" id="opacitySlider" min="0" max="100" value="70">
       <span id="opacityValue">70%</span>
+    </div>
+
+    <div class="control-group">
+      <button id="refreshRadar" class="refresh-btn">🔄 Refresh</button>
     </div>
   </div>
 
@@ -161,6 +196,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Click Marker -->
+  <div id="clickMarker" class="click-marker hidden">📍</div>
 </div>
 
 <!-- Local JavaScript -->

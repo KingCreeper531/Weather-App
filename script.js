@@ -9,6 +9,7 @@ let currentLat = 39.8283;
 let currentLng = -98.5795; // Center of US
 let currentRadarType = 'precipitationIntensity';
 let currentTimeMode = 'now';
+let clickMarker = null;
 
 // ================================
 //  WEATHER CODE TRANSLATION
@@ -39,6 +40,48 @@ const map = new mapboxgl.Map({
 
 const RADAR_SOURCE = "nexrad-radar";
 const RADAR_LAYER = "nexrad-radar-layer";
+
+// ================================
+//  SEARCH FUNCTIONALITY
+// ================================
+async function searchLocation(query) {
+    try {
+        // Use Mapbox Geocoding API
+        const response = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_KEY}&limit=5&country=US`
+        );
+        const data = await response.json();
+        
+        return data.features.map(feature => ({
+            name: feature.place_name,
+            lng: feature.center[0],
+            lat: feature.center[1]
+        }));
+    } catch (error) {
+        console.error('Search error:', error);
+        return [];
+    }
+}
+
+function showSearchResults(results) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    if (results.length === 0) {
+        resultsContainer.innerHTML = '<div class="search-result-item">No results found</div>';
+    } else {
+        resultsContainer.innerHTML = results.map(result => 
+            `<div class="search-result-item" data-lat="${result.lat}" data-lng="${result.lng}">
+                ${result.name}
+            </div>`
+        ).join('');
+    }
+    
+    resultsContainer.classList.remove('hidden');
+}
+
+function hideSearchResults() {
+    document.getElementById('searchResults').classList.add('hidden');
+}
 
 // ================================
 //  RADAR FUNCTIONS
@@ -127,6 +170,23 @@ function updateLegend(radarType) {
                 { color: '#888888', label: 'Mostly' },
                 { color: '#444444', label: 'Overcast' }
             ]
+        },
+        humidity: {
+            title: 'Humidity',
+            scale: [
+                { color: '#8B4513', label: 'Dry' },
+                { color: '#FFD700', label: 'Low' },
+                { color: '#32CD32', label: 'Moderate' },
+                { color: '#1E90FF', label: 'High' }
+            ]
+        },
+        pressure: {
+            title: 'Pressure',
+            scale: [
+                { color: '#ff0000', label: 'Low' },
+                { color: '#ffff00', label: 'Normal' },
+                { color: '#00ff00', label: 'High' }
+            ]
         }
     };
 
@@ -148,23 +208,49 @@ async function getWeatherData(lat, lng) {
     try {
         const realtimeUrl = `https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lng}&apikey=${TOMORROW_API}`;
         const hourlyUrl = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lng}&timesteps=1h&apikey=${TOMORROW_API}`;
+        const dailyUrl = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lng}&timesteps=1d&apikey=${TOMORROW_API}`;
         
-        const [realtimeRes, hourlyRes] = await Promise.all([
+        const [realtimeRes, hourlyRes, dailyRes] = await Promise.all([
             fetch(realtimeUrl),
-            fetch(hourlyUrl)
+            fetch(hourlyUrl),
+            fetch(dailyUrl)
         ]);
         
         const realtimeData = await realtimeRes.json();
         const hourlyData = await hourlyRes.json();
+        const dailyData = await dailyRes.json();
         
         return {
             current: realtimeData.data,
-            hourly: hourlyData.timelines.hourly.slice(0, 24)
+            hourly: hourlyData.timelines.hourly.slice(0, 24),
+            daily: dailyData.timelines.daily.slice(0, 7)
         };
     } catch (error) {
         console.error('Weather data fetch error:', error);
         return null;
     }
+}
+
+async function reverseGeocode(lat, lng) {
+    try {
+        const response = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_KEY}`
+        );
+        const data = await response.json();
+        
+        if (data.features && data.features.length > 0) {
+            return data.features[0].place_name;
+        }
+        return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+    } catch (error) {
+        console.error('Reverse geocoding error:', error);
+        return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+    }
+}
+
+function getWindDirection(degrees) {
+    const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    return directions[Math.round(degrees / 22.5) % 16];
 }
 
 async function updateWeatherPanel(lat, lng) {
@@ -177,8 +263,11 @@ async function updateWeatherPanel(lat, lng) {
 
     const current = weatherData.current.values;
     
-    // Update location name (reverse geocoding would be ideal here)
-    document.getElementById('locationName').textContent = `Weather at ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+    // Update location info
+    const locationName = await reverseGeocode(lat, lng);
+    document.getElementById('locationName').textContent = 'Weather Information';
+    document.getElementById('locationAddress').textContent = locationName;
+    document.getElementById('locationCoords').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     
     // Update current weather
     document.getElementById('currentTemp').textContent = `${Math.round(current.temperature)}°`;
@@ -188,10 +277,12 @@ async function updateWeatherPanel(lat, lng) {
     // Update details
     document.getElementById('humidity').textContent = `${Math.round(current.humidity)}%`;
     document.getElementById('windSpeed').textContent = `${Math.round(current.windSpeed)} mph`;
+    document.getElementById('windDirection').textContent = getWindDirection(current.windDirection);
     document.getElementById('pressure').textContent = `${Math.round(current.pressureSeaLevel)} mb`;
     document.getElementById('visibility').textContent = `${Math.round(current.visibility)} mi`;
     document.getElementById('uvIndex').textContent = Math.round(current.uvIndex);
-    document.getElementById('precipitation').textContent = `${current.precipitationIntensity.toFixed(2)} in`;
+    document.getElementById('dewPoint').textContent = `${Math.round(current.dewPoint)}°`;
+    document.getElementById('cloudCover').textContent = `${Math.round(current.cloudCover)}%`;
     
     // Update hourly forecast
     const hourlyContainer = document.getElementById('hourlyData');
@@ -203,16 +294,45 @@ async function updateWeatherPanel(lat, lng) {
             <div class="hourly-item">
                 <div class="hourly-time">${timeStr}</div>
                 <div class="hourly-temp">${Math.round(hour.values.temperature)}°</div>
-                <div class="hourly-condition">${weatherText[hour.values.weatherCode] || 'N/A'}</div>
+                <div class="hourly-condition">${(weatherText[hour.values.weatherCode] || 'N/A').substring(0, 8)}</div>
             </div>
         `;
     }).join('');
+
+    // Update daily forecast
+    const dailyContainer = document.getElementById('dailyData');
+    dailyContainer.innerHTML = weatherData.daily.map(day => {
+        const date = new Date(day.time);
+        const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        
+        return `
+            <div class="daily-item">
+                <div class="daily-date">${dateStr}</div>
+                <div class="daily-temps">${Math.round(day.values.temperatureMax)}° / ${Math.round(day.values.temperatureMin)}°</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function showClickMarker(lat, lng) {
+    const marker = document.getElementById('clickMarker');
+    const point = map.project([lng, lat]);
+    
+    marker.style.left = `${point.x}px`;
+    marker.style.top = `${point.y}px`;
+    marker.classList.remove('hidden');
+    
+    // Hide marker after 2 seconds
+    setTimeout(() => {
+        marker.classList.add('hidden');
+    }, 2000);
 }
 
 function showWeatherPanel(lat, lng) {
     const panel = document.getElementById('weatherPanel');
     panel.classList.remove('hidden');
     updateWeatherPanel(lat, lng);
+    showClickMarker(lat, lng);
 }
 
 function hideWeatherPanel() {
@@ -234,6 +354,50 @@ map.on('click', (e) => {
     currentLat = e.lngLat.lat;
     currentLng = e.lngLat.lng;
     showWeatherPanel(currentLat, currentLng);
+});
+
+// Search functionality
+document.getElementById('searchBtn').addEventListener('click', async () => {
+    const query = document.getElementById('searchInput').value.trim();
+    if (query) {
+        const results = await searchLocation(query);
+        showSearchResults(results);
+    }
+});
+
+document.getElementById('searchInput').addEventListener('keypress', async (e) => {
+    if (e.key === 'Enter') {
+        const query = e.target.value.trim();
+        if (query) {
+            const results = await searchLocation(query);
+            showSearchResults(results);
+        }
+    }
+});
+
+// Search results click handler
+document.getElementById('searchResults').addEventListener('click', (e) => {
+    if (e.target.classList.contains('search-result-item')) {
+        const lat = parseFloat(e.target.dataset.lat);
+        const lng = parseFloat(e.target.dataset.lng);
+        
+        map.flyTo({
+            center: [lng, lat],
+            zoom: 10,
+            duration: 1500
+        });
+        
+        showWeatherPanel(lat, lng);
+        hideSearchResults();
+        document.getElementById('searchInput').value = '';
+    }
+});
+
+// Hide search results when clicking elsewhere
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-container')) {
+        hideSearchResults();
+    }
 });
 
 // Time controls
@@ -274,6 +438,11 @@ document.getElementById('opacitySlider').addEventListener('input', (e) => {
     }
 });
 
+// Refresh radar button
+document.getElementById('refreshRadar').addEventListener('click', () => {
+    updateRadarLayer(currentRadarType, currentTimeMode);
+});
+
 // Close weather panel
 document.getElementById('closePanel').addEventListener('click', hideWeatherPanel);
 
@@ -301,3 +470,4 @@ setInterval(() => {
 
 console.log('Weather Dashboard initialized successfully!');
 console.log('Click anywhere on the map to get weather information for that location.');
+console.log('Use the search bar to find specific locations by address or zip code.');
