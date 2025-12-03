@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Weather Dashboard — Tomorrow.io + Mapbox</title>
+  <title>Weather Dashboard — Tomorrow.io + NEXRAD Style</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   
@@ -18,60 +18,147 @@
 <div class="container">
   <div id="map"></div>
 
-  <div id="panel">
-    <!-- Header -->
-    <div class="header">
-      <h1>Weather Dashboard</h1>
-      <p>Real-time weather data powered by Tomorrow.io</p>
-    </div>
-
-    <!-- Location Input -->
-    <div class="location-section">
-      <h3>Location</h3>
-      <input id="locationInput" placeholder="lat,lng (e.g., 42.3478,-71.0466)" />
-      <div class="button-group">
-        <button id="myLocationBtn">My Location</button>
-        <button id="updateBtn" class="secondary">Update</button>
+  <!-- Time Controls (NEXRAD Style) -->
+  <div class="time-controls">
+    <div class="time-header">
+      <div class="time-indicator">
+        <div class="live-dot"></div>
+        <span id="currentTime">Now</span>
+        <span id="timeMode">REALTIME</span>
       </div>
     </div>
+    
+    <div class="time-options">
+      <div class="time-option active" data-time="now" data-mode="realtime">
+        <div class="time-dot live"></div>
+        <span>Now</span>
+        <small>REALTIME</small>
+      </div>
+      <div class="time-option" data-time="today" data-mode="forecast">
+        <div class="time-dot"></div>
+        <span>Today</span>
+      </div>
+      <div class="time-option" data-time="tomorrow" data-mode="forecast">
+        <div class="time-dot"></div>
+        <span>Tomorrow</span>
+      </div>
+      <div class="time-option" data-time="thisweek" data-mode="forecast">
+        <div class="time-dot"></div>
+        <span>This Week</span>
+      </div>
+      <div class="time-option" data-time="nextweek" data-mode="forecast">
+        <div class="time-dot"></div>
+        <span>Next Week</span>
+      </div>
+      <div class="time-option" data-time="yesterday" data-mode="history">
+        <div class="time-dot"></div>
+        <span>Yesterday</span>
+      </div>
+      <div class="time-option" data-time="lastweek" data-mode="history">
+        <div class="time-dot"></div>
+        <span>Last Week</span>
+        <div class="dropdown-arrow">▼</div>
+      </div>
+    </div>
+    
+    <div class="all-option">
+      <span>📊 All</span>
+    </div>
+  </div>
 
-    <!-- Current Weather -->
-    <div class="weather-section">
-      <h3>Current Weather</h3>
-      <div class="weather-card">
-        <div class="weather-main">
-          <div>
-            <div id="temp" class="temperature">--°</div>
-            <div id="conditions" class="conditions">Loading...</div>
+  <!-- Weather Info Panel -->
+  <div id="weatherPanel" class="weather-panel hidden">
+    <div class="panel-header">
+      <h3 id="locationName">Weather Information</h3>
+      <button id="closePanel" class="close-btn">×</button>
+    </div>
+    
+    <div class="panel-content">
+      <div class="current-weather">
+        <div class="temp-display">
+          <span id="currentTemp">--°</span>
+          <div class="temp-details">
+            <div id="feelsLike">Feels like --°</div>
+            <div id="conditions">Loading...</div>
           </div>
         </div>
-        <div id="history" class="history-info">Loading recent data...</div>
+      </div>
+      
+      <div class="weather-details">
+        <div class="detail-item">
+          <span class="label">Humidity</span>
+          <span id="humidity" class="value">--%</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Wind</span>
+          <span id="windSpeed" class="value">-- mph</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Pressure</span>
+          <span id="pressure" class="value">-- mb</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Visibility</span>
+          <span id="visibility" class="value">-- mi</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">UV Index</span>
+          <span id="uvIndex" class="value">--</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Precipitation</span>
+          <span id="precipitation" class="value">-- in</span>
+        </div>
+      </div>
+      
+      <div class="hourly-forecast">
+        <h4>24-Hour Forecast</h4>
+        <div id="hourlyData" class="hourly-container">
+          Loading hourly data...
+        </div>
       </div>
     </div>
+  </div>
 
-    <!-- Forecast -->
-    <div class="weather-section">
-      <h3>5-Day Forecast</h3>
-      <ul id="forecast" class="forecast-list">
-        <li class="loading">Loading forecast...</li>
-      </ul>
-    </div>
-
-    <!-- Map Overlay Controls -->
-    <div class="overlay-section">
-      <h3>Map Overlay</h3>
-      <select id="overlaySelect">
+  <!-- Radar Controls -->
+  <div class="radar-controls">
+    <div class="control-group">
+      <label>Radar Type:</label>
+      <select id="radarType">
         <option value="precipitationIntensity">Precipitation</option>
         <option value="temperature">Temperature</option>
         <option value="windSpeed">Wind Speed</option>
         <option value="cloudCover">Cloud Cover</option>
       </select>
     </div>
+    
+    <div class="control-group">
+      <label>Opacity:</label>
+      <input type="range" id="opacitySlider" min="0" max="100" value="70">
+      <span id="opacityValue">70%</span>
+    </div>
+  </div>
 
-    <!-- API Response Debug (Optional) -->
-    <div class="debug-section" style="display: none;">
-      <h3>Debug Response</h3>
-      <pre id="output">No data yet</pre>
+  <!-- Legend -->
+  <div class="radar-legend">
+    <div class="legend-title">Precipitation Intensity</div>
+    <div class="legend-scale">
+      <div class="legend-item">
+        <div class="legend-color" style="background: #00ff00;"></div>
+        <span>Light</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #ffff00;"></div>
+        <span>Moderate</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #ff8000;"></div>
+        <span>Heavy</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #ff0000;"></div>
+        <span>Intense</span>
+      </div>
     </div>
   </div>
 </div>

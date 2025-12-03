@@ -10,232 +10,399 @@
 html, body {
     height: 100%;
     font-family: "Inter", system-ui, sans-serif;
-    background: #0f0f0f;
+    background: #1a1a1a;
     color: #ffffff;
+    overflow: hidden;
 }
 
 /* ============================
-   LAYOUT
+   MAIN LAYOUT
 ============================ */
 .container {
-    display: flex;
+    position: relative;
     height: 100vh;
+    width: 100vw;
 }
 
 #map {
-    flex: 1;
-    min-height: 100vh;
-}
-
-#panel {
-    width: 400px;
-    background: rgba(26, 26, 26, 0.95);
-    backdrop-filter: blur(10px);
-    border-left: 1px solid #2b2b2b;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-}
-
-/* ============================
-   HEADER
-============================ */
-.header {
-    padding: 20px;
-    border-bottom: 1px solid #2b2b2b;
-}
-
-.header h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 8px;
-    color: #00aaff;
-}
-
-.header p {
-    color: #cccccc;
-    font-size: 0.9rem;
-}
-
-/* ============================
-   LOCATION SECTION
-============================ */
-.location-section {
-    padding: 20px;
-    border-bottom: 1px solid #2b2b2b;
-}
-
-.location-section h3 {
-    margin-bottom: 12px;
-    font-size: 1.1rem;
-    color: #00aaff;
-}
-
-#locationInput {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    padding: 12px;
-    background: #131313;
-    border: 1px solid #2b2b2b;
-    border-radius: 8px;
-    color: #ffffff;
-    font-size: 0.9rem;
-    margin-bottom: 12px;
+    height: 100%;
+    z-index: 1;
 }
 
-#locationInput:focus {
-    outline: none;
-    border-color: #00aaff;
+/* ============================
+   TIME CONTROLS (NEXRAD STYLE)
+============================ */
+.time-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(40, 40, 50, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 0;
+    z-index: 1000;
+    min-width: 200px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.button-group {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+.time-header {
+    padding: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.time-indicator {
+    display: flex;
+    align-items: center;
     gap: 8px;
 }
 
-button {
-    padding: 10px 16px;
-    background: #00aaff;
-    border: none;
-    border-radius: 6px;
-    color: white;
+.live-dot {
+    width: 8px;
+    height: 8px;
+    background: #00ff88;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+#currentTime {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+#timeMode {
+    font-size: 0.75rem;
+    color: #00ff88;
     font-weight: 500;
+}
+
+.time-options {
+    padding: 8px 0;
+}
+
+.time-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.time-option:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.time-option.active {
+    background: rgba(0, 255, 136, 0.1);
+    border-left: 3px solid #00ff88;
+}
+
+.time-dot {
+    width: 6px;
+    height: 6px;
+    background: #666;
+    border-radius: 50%;
+}
+
+.time-dot.live {
+    background: #00ff88;
+    animation: pulse 2s infinite;
+}
+
+.time-option span {
+    font-weight: 500;
+}
+
+.time-option small {
+    font-size: 0.75rem;
+    color: #999;
+    margin-left: auto;
+}
+
+.dropdown-arrow {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.all-option {
+    padding: 12px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     cursor: pointer;
     transition: background 0.2s;
-    font-size: 0.85rem;
 }
 
-button:hover {
-    background: #0088cc;
-}
-
-button.secondary {
-    background: #333;
-}
-
-button.secondary:hover {
-    background: #444;
+.all-option:hover {
+    background: rgba(255, 255, 255, 0.05);
 }
 
 /* ============================
-   WEATHER SECTIONS
+   WEATHER PANEL
 ============================ */
-.weather-section {
-    padding: 20px;
-    border-bottom: 1px solid #2b2b2b;
+.weather-panel {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: 350px;
+    max-height: calc(100vh - 40px);
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(15px);
+    border-radius: 16px;
+    z-index: 1000;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
 }
 
-.weather-section h3 {
-    margin-bottom: 16px;
-    font-size: 1.1rem;
-    color: #00aaff;
+.weather-panel.hidden {
+    transform: translateX(-100%);
+    opacity: 0;
 }
 
-.weather-card {
-    background: #131313;
-    border-radius: 8px;
-    padding: 16px;
-    border-left: 4px solid #00aaff;
-}
-
-.weather-main {
-    margin-bottom: 12px;
-}
-
-.temperature {
-    font-size: 2.5rem;
-    font-weight: 700;
-    margin-bottom: 5px;
-}
-
-.conditions {
-    font-size: 1.1rem;
-    color: #dedede;
-    margin-bottom: 10px;
-}
-
-.history-info {
-    color: #888;
-    font-size: 0.9rem;
-}
-
-/* ============================
-   FORECAST
-============================ */
-.forecast-list {
-    list-style: none;
-}
-
-.forecast-list li {
+.panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
-    background: #131313;
-    border-radius: 6px;
-    margin-bottom: 8px;
-    border-left: 3px solid #00aaff;
+    padding: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.forecast-list li:last-child {
+.panel-header h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #00aaff;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.panel-content {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(100vh - 120px);
+}
+
+.current-weather {
+    margin-bottom: 24px;
+}
+
+.temp-display {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+#currentTemp {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #00aaff;
+}
+
+.temp-details {
+    padding-top: 8px;
+}
+
+#feelsLike {
+    font-size: 0.9rem;
+    color: #ccc;
+    margin-bottom: 4px;
+}
+
+#conditions {
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+.weather-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+
+.detail-item .label {
+    font-size: 0.85rem;
+    color: #999;
+}
+
+.detail-item .value {
+    font-weight: 600;
+    color: #fff;
+}
+
+.hourly-forecast h4 {
+    margin-bottom: 16px;
+    color: #00aaff;
+    font-size: 1rem;
+}
+
+.hourly-container {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+}
+
+.hourly-item {
+    min-width: 80px;
+    text-align: center;
+    padding: 12px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+
+.hourly-time {
+    font-size: 0.8rem;
+    color: #999;
+    margin-bottom: 8px;
+}
+
+.hourly-temp {
+    font-weight: 600;
+    color: #00aaff;
+    margin-bottom: 4px;
+}
+
+.hourly-condition {
+    font-size: 0.75rem;
+    color: #ccc;
+}
+
+/* ============================
+   RADAR CONTROLS
+============================ */
+.radar-controls {
+    position: absolute;
+    bottom: 80px;
+    left: 20px;
+    background: rgba(40, 40, 50, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 16px;
+    z-index: 1000;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.control-group:last-child {
     margin-bottom: 0;
 }
 
-.loading {
-    text-align: center;
-    color: #888;
-    font-style: italic;
+.control-group label {
+    font-size: 0.85rem;
+    color: #ccc;
+    min-width: 70px;
 }
 
-/* ============================
-   OVERLAY CONTROLS
-============================ */
-.overlay-section {
-    padding: 20px;
-    border-bottom: 1px solid #2b2b2b;
-}
-
-.overlay-section h3 {
-    margin-bottom: 12px;
-    font-size: 1.1rem;
-    color: #00aaff;
-}
-
-select {
-    width: 100%;
-    padding: 12px;
-    background: #131313;
-    border: 1px solid #2b2b2b;
-    border-radius: 8px;
-    color: #ffffff;
-    font-size: 0.9rem;
-}
-
-select:focus {
-    outline: none;
-    border-color: #00aaff;
-}
-
-/* ============================
-   DEBUG SECTION (OPTIONAL)
-============================ */
-.debug-section {
-    padding: 20px;
-}
-
-.debug-section h3 {
-    margin-bottom: 12px;
-    font-size: 1.1rem;
-    color: #00aaff;
-}
-
-pre {
-    background: #111;
-    padding: 12px;
+.control-group select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 6px;
-    font-size: 11px;
-    overflow-x: auto;
-    border: 1px solid #2b2b2b;
+    color: #fff;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+}
+
+.control-group input[type="range"] {
+    width: 100px;
+}
+
+#opacityValue {
+    font-size: 0.85rem;
+    color: #00aaff;
+    font-weight: 500;
+    min-width: 35px;
+}
+
+/* ============================
+   RADAR LEGEND
+============================ */
+.radar-legend {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background: rgba(40, 40, 50, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 16px;
+    z-index: 1000;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.legend-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #00aaff;
+}
+
+.legend-scale {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.legend-color {
+    width: 16px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+.legend-item span {
+    font-size: 0.75rem;
     color: #ccc;
 }
 
@@ -243,41 +410,57 @@ pre {
    RESPONSIVE DESIGN
 ============================ */
 @media (max-width: 768px) {
-    .container {
-        flex-direction: column;
+    .time-controls {
+        top: 10px;
+        right: 10px;
+        min-width: 180px;
     }
     
-    #map {
-        height: 50vh;
-        min-height: 50vh;
+    .weather-panel {
+        top: 10px;
+        left: 10px;
+        width: calc(100vw - 20px);
+        max-width: 300px;
     }
     
-    #panel {
-        width: 100%;
-        height: 50vh;
+    .radar-controls,
+    .radar-legend {
+        left: 10px;
+        right: 10px;
+        width: auto;
     }
     
-    .header h1 {
-        font-size: 1.3rem;
+    .radar-controls {
+        bottom: 120px;
     }
     
-    .temperature {
-        font-size: 2rem;
+    .radar-legend {
+        bottom: 10px;
     }
 }
 
-@media (max-width: 480px) {
-    .location-section,
-    .weather-section,
-    .overlay-section {
-        padding: 15px;
-    }
-    
-    .button-group {
-        grid-template-columns: 1fr;
-    }
-    
-    .temperature {
-        font-size: 1.8rem;
-    }
+/* ============================
+   CUSTOM SCROLLBARS
+============================ */
+.panel-content::-webkit-scrollbar,
+.hourly-container::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.panel-content::-webkit-scrollbar-track,
+.hourly-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.panel-content::-webkit-scrollbar-thumb,
+.hourly-container::-webkit-scrollbar-thumb {
+    background: rgba(0, 170, 255, 0.5);
+    border-radius: 3px;
+}
+
+.panel-content::-webkit-scrollbar-thumb:hover,
+.hourly-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 170, 255, 0.7);
 }

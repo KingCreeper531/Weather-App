@@ -4,236 +4,300 @@
 const TOMORROW_API = "SxfCeG33LbiKBLlR5iEegtxw5aXnZEOr";
 const MAPBOX_KEY = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2aTlqeTN5OSJ9.QYtnuhdixR4SGxLQldE9PA";
 
-// Default location (Boston)
-let lat = 42.3478;
-let lon = -71.0466;
+// Current state
+let currentLat = 39.8283;
+let currentLng = -98.5795; // Center of US
+let currentRadarType = 'precipitationIntensity';
+let currentTimeMode = 'now';
 
 // ================================
 //  WEATHER CODE TRANSLATION
 // ================================
 const weatherText = {
-    1000: "Clear",
-    1100: "Mostly Clear",
-    1101: "Partly Cloudy",
-    1102: "Cloudy",
-    2000: "Fog",
-    2100: "Light Fog",
-    3000: "Light Wind",
-    3001: "Windy",
-    3002: "Strong Wind",
-    4000: "Drizzle",
-    4001: "Rain",
-    4200: "Light Rain",
-    4201: "Heavy Rain",
-    5000: "Snow",
-    5001: "Flurries",
-    5100: "Light Snow",
-    5101: "Heavy Snow",
-    6000: "Freezing Drizzle",
-    6001: "Freezing Rain",
-    6200: "Light Freezing Rain",
-    6201: "Heavy Freezing Rain",
-    7000: "Ice Pellets",
-    7101: "Heavy Ice Pellets",
-    7102: "Light Ice Pellets",
+    1000: "Clear", 1100: "Mostly Clear", 1101: "Partly Cloudy", 1102: "Cloudy",
+    2000: "Fog", 2100: "Light Fog", 3000: "Light Wind", 3001: "Windy", 3002: "Strong Wind",
+    4000: "Drizzle", 4001: "Rain", 4200: "Light Rain", 4201: "Heavy Rain",
+    5000: "Snow", 5001: "Flurries", 5100: "Light Snow", 5101: "Heavy Snow",
+    6000: "Freezing Drizzle", 6001: "Freezing Rain", 6200: "Light Freezing Rain", 6201: "Heavy Freezing Rain",
+    7000: "Ice Pellets", 7101: "Heavy Ice Pellets", 7102: "Light Ice Pellets",
     8000: "Thunderstorm"
 };
 
 // ================================
-//  MAPBOX MAP INITIALIZATION
+//  MAPBOX INITIALIZATION
 // ================================
 mapboxgl.accessToken = MAPBOX_KEY;
 
 const map = new mapboxgl.Map({
     container: 'map',
     style: "mapbox://styles/mapbox/dark-v11",
-    center: [lon, lat],
-    zoom: 9
+    center: [currentLng, currentLat],
+    zoom: 4,
+    minZoom: 2,
+    maxZoom: 12
 });
 
-const RASTER_SOURCE = "weatherRadar";
-const RASTER_LAYER = "weatherRadarLayer";
+const RADAR_SOURCE = "nexrad-radar";
+const RADAR_LAYER = "nexrad-radar-layer";
 
 // ================================
-//  MAP OVERLAY FUNCTIONS
+//  RADAR FUNCTIONS
 // ================================
-function updateOverlay(dataField) {
-    const tileURL = `https://api.tomorrow.io/v4/map/tile/{z}/{x}/{y}/${dataField}/now.png?apikey=${TOMORROW_API}`;
+function updateRadarLayer(radarType, timeMode = 'now') {
+    let timestamp = 'now';
+    
+    // Convert time mode to appropriate timestamp
+    if (timeMode !== 'now') {
+        const now = new Date();
+        switch(timeMode) {
+            case 'yesterday':
+                timestamp = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+                break;
+            case 'tomorrow':
+                timestamp = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+                break;
+            default:
+                timestamp = 'now';
+        }
+    }
 
-    if (map.getSource(RASTER_SOURCE)) {
-        map.getSource(RASTER_SOURCE).setTiles([tileURL]);
+    const tileURL = `https://api.tomorrow.io/v4/map/tile/{z}/{x}/{y}/${radarType}/${timestamp}.png?apikey=${TOMORROW_API}`;
+
+    if (map.getSource(RADAR_SOURCE)) {
+        map.getSource(RADAR_SOURCE).setTiles([tileURL]);
     } else {
-        map.addSource(RASTER_SOURCE, {
+        map.addSource(RADAR_SOURCE, {
             type: "raster",
             tiles: [tileURL],
             tileSize: 256
         });
 
         map.addLayer({
-            id: RASTER_LAYER,
+            id: RADAR_LAYER,
             type: "raster",
-            source: RASTER_SOURCE,
-            paint: { "raster-opacity": 0.7 }
+            source: RADAR_SOURCE,
+            paint: { 
+                "raster-opacity": 0.7,
+                "raster-fade-duration": 300
+            }
         });
     }
+
+    updateLegend(radarType);
 }
 
-// ================================
-//  WEATHER API FUNCTIONS
-// ================================
-async function getRealtime() {
-    try {
-        const url = `https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lon}&apikey=${TOMORROW_API}`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        const temp = Math.round(data.data.values.temperature);
-        const code = data.data.values.weatherCode;
-
-        document.getElementById("temp").textContent = `${temp}°C`;
-        document.getElementById("conditions").textContent =
-            weatherText[code] || `Code: ${code}`;
-
-    } catch (err) {
-        console.error("Realtime weather error:", err);
-        document.getElementById("conditions").textContent = "Error loading weather";
-    }
-}
-
-async function getForecast() {
-    try {
-        const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${TOMORROW_API}`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        const list = document.getElementById("forecast");
-        list.innerHTML = "";
-
-        // Show 5 days of forecast
-        data.timelines.daily.slice(0, 5).forEach(day => {
-            const li = document.createElement("li");
-            const date = new Date(day.time).toLocaleDateString('en-US', { 
-                weekday: 'short', 
-                month: 'short', 
-                day: 'numeric' 
-            });
-            
-            li.innerHTML = `
-                <span>${date}</span>
-                <span>${Math.round(day.values.temperatureMax)}° / ${Math.round(day.values.temperatureMin)}°</span>
-            `;
-            list.appendChild(li);
-        });
-
-    } catch (err) {
-        console.error("Forecast error:", err);
-        document.getElementById("forecast").innerHTML = '<li class="loading">Error loading forecast</li>';
-    }
-}
-
-async function getHistory() {
-    try {
-        const url = `https://api.tomorrow.io/v4/weather/history/recent?location=${lat},${lon}&apikey=${TOMORROW_API}`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (data.data && data.data.length > 0) {
-            document.getElementById("history").textContent =
-                `Recent: ${Math.round(data.data[0].values.temperature)}°C`;
-        } else {
-            document.getElementById("history").textContent = "No recent history available";
-        }
-
-    } catch (err) {
-        console.error("History error:", err);
-        document.getElementById("history").textContent = "History unavailable";
-    }
-}
-
-// ================================
-//  LOCATION UPDATE FUNCTIONS
-// ================================
-function updateLocation(newLat, newLon) {
-    lat = newLat;
-    lon = newLon;
-    map.setCenter([lon, lat]);
-    document.getElementById("locationInput").value = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+function updateLegend(radarType) {
+    const legendTitle = document.querySelector('.legend-title');
+    const legendScale = document.querySelector('.legend-scale');
     
-    // Update all weather data
-    getRealtime();
-    getForecast();
-    getHistory();
+    const legends = {
+        precipitationIntensity: {
+            title: 'Precipitation Intensity',
+            scale: [
+                { color: '#00ff00', label: 'Light' },
+                { color: '#ffff00', label: 'Moderate' },
+                { color: '#ff8000', label: 'Heavy' },
+                { color: '#ff0000', label: 'Intense' }
+            ]
+        },
+        temperature: {
+            title: 'Temperature',
+            scale: [
+                { color: '#0000ff', label: 'Cold' },
+                { color: '#00ffff', label: 'Cool' },
+                { color: '#00ff00', label: 'Mild' },
+                { color: '#ffff00', label: 'Warm' },
+                { color: '#ff0000', label: 'Hot' }
+            ]
+        },
+        windSpeed: {
+            title: 'Wind Speed',
+            scale: [
+                { color: '#00ff00', label: 'Light' },
+                { color: '#ffff00', label: 'Moderate' },
+                { color: '#ff8000', label: 'Strong' },
+                { color: '#ff0000', label: 'Severe' }
+            ]
+        },
+        cloudCover: {
+            title: 'Cloud Cover',
+            scale: [
+                { color: '#ffffff', label: 'Clear' },
+                { color: '#cccccc', label: 'Partly' },
+                { color: '#888888', label: 'Mostly' },
+                { color: '#444444', label: 'Overcast' }
+            ]
+        }
+    };
+
+    const legend = legends[radarType];
+    legendTitle.textContent = legend.title;
+    
+    legendScale.innerHTML = legend.scale.map(item => 
+        `<div class="legend-item">
+            <div class="legend-color" style="background: ${item.color};"></div>
+            <span>${item.label}</span>
+        </div>`
+    ).join('');
+}
+
+// ================================
+//  WEATHER DATA FUNCTIONS
+// ================================
+async function getWeatherData(lat, lng) {
+    try {
+        const realtimeUrl = `https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lng}&apikey=${TOMORROW_API}`;
+        const hourlyUrl = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lng}&timesteps=1h&apikey=${TOMORROW_API}`;
+        
+        const [realtimeRes, hourlyRes] = await Promise.all([
+            fetch(realtimeUrl),
+            fetch(hourlyUrl)
+        ]);
+        
+        const realtimeData = await realtimeRes.json();
+        const hourlyData = await hourlyRes.json();
+        
+        return {
+            current: realtimeData.data,
+            hourly: hourlyData.timelines.hourly.slice(0, 24)
+        };
+    } catch (error) {
+        console.error('Weather data fetch error:', error);
+        return null;
+    }
+}
+
+async function updateWeatherPanel(lat, lng) {
+    const weatherData = await getWeatherData(lat, lng);
+    
+    if (!weatherData) {
+        document.getElementById('locationName').textContent = 'Error loading weather data';
+        return;
+    }
+
+    const current = weatherData.current.values;
+    
+    // Update location name (reverse geocoding would be ideal here)
+    document.getElementById('locationName').textContent = `Weather at ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+    
+    // Update current weather
+    document.getElementById('currentTemp').textContent = `${Math.round(current.temperature)}°`;
+    document.getElementById('feelsLike').textContent = `Feels like ${Math.round(current.temperatureApparent)}°`;
+    document.getElementById('conditions').textContent = weatherText[current.weatherCode] || 'Unknown';
+    
+    // Update details
+    document.getElementById('humidity').textContent = `${Math.round(current.humidity)}%`;
+    document.getElementById('windSpeed').textContent = `${Math.round(current.windSpeed)} mph`;
+    document.getElementById('pressure').textContent = `${Math.round(current.pressureSeaLevel)} mb`;
+    document.getElementById('visibility').textContent = `${Math.round(current.visibility)} mi`;
+    document.getElementById('uvIndex').textContent = Math.round(current.uvIndex);
+    document.getElementById('precipitation').textContent = `${current.precipitationIntensity.toFixed(2)} in`;
+    
+    // Update hourly forecast
+    const hourlyContainer = document.getElementById('hourlyData');
+    hourlyContainer.innerHTML = weatherData.hourly.map(hour => {
+        const time = new Date(hour.time);
+        const timeStr = time.getHours().toString().padStart(2, '0') + ':00';
+        
+        return `
+            <div class="hourly-item">
+                <div class="hourly-time">${timeStr}</div>
+                <div class="hourly-temp">${Math.round(hour.values.temperature)}°</div>
+                <div class="hourly-condition">${weatherText[hour.values.weatherCode] || 'N/A'}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function showWeatherPanel(lat, lng) {
+    const panel = document.getElementById('weatherPanel');
+    panel.classList.remove('hidden');
+    updateWeatherPanel(lat, lng);
+}
+
+function hideWeatherPanel() {
+    const panel = document.getElementById('weatherPanel');
+    panel.classList.add('hidden');
 }
 
 // ================================
 //  EVENT LISTENERS
 // ================================
 
-// Map loaded
-map.on("load", () => {
-    updateOverlay("precipitationIntensity");
-    getRealtime();
-    getForecast();
-    getHistory();
+// Map initialization
+map.on('load', () => {
+    updateRadarLayer(currentRadarType, currentTimeMode);
 });
 
-// Map click to set location
-map.on("click", (e) => {
-    updateLocation(e.lngLat.lat, e.lngLat.lng);
+// Map click handler
+map.on('click', (e) => {
+    currentLat = e.lngLat.lat;
+    currentLng = e.lngLat.lng;
+    showWeatherPanel(currentLat, currentLng);
 });
 
-// Overlay selector change
-document.getElementById("overlaySelect").addEventListener("change", (e) => {
-    updateOverlay(e.target.value);
+// Time controls
+document.querySelectorAll('.time-option').forEach(option => {
+    option.addEventListener('click', () => {
+        // Remove active class from all options
+        document.querySelectorAll('.time-option').forEach(opt => opt.classList.remove('active'));
+        
+        // Add active class to clicked option
+        option.classList.add('active');
+        
+        // Update current time mode
+        currentTimeMode = option.dataset.time;
+        const mode = option.dataset.mode;
+        
+        // Update display
+        document.getElementById('currentTime').textContent = option.querySelector('span').textContent;
+        document.getElementById('timeMode').textContent = mode.toUpperCase();
+        
+        // Update radar layer
+        updateRadarLayer(currentRadarType, currentTimeMode);
+    });
 });
 
-// Manual location update
-document.getElementById("updateBtn").addEventListener("click", () => {
-    const input = document.getElementById("locationInput").value;
+// Radar type selector
+document.getElementById('radarType').addEventListener('change', (e) => {
+    currentRadarType = e.target.value;
+    updateRadarLayer(currentRadarType, currentTimeMode);
+});
 
-    if (input.includes(",")) {
-        const [newLat, newLon] = input.split(",").map(x => parseFloat(x.trim()));
-        if (!isNaN(newLat) && !isNaN(newLon)) {
-            updateLocation(newLat, newLon);
-        } else {
-            alert("Please enter valid coordinates (e.g., 42.3478,-71.0466)");
-        }
-    } else {
-        alert("Please enter coordinates in format: latitude,longitude");
+// Opacity slider
+document.getElementById('opacitySlider').addEventListener('input', (e) => {
+    const opacity = e.target.value / 100;
+    document.getElementById('opacityValue').textContent = `${e.target.value}%`;
+    
+    if (map.getLayer(RADAR_LAYER)) {
+        map.setPaintProperty(RADAR_LAYER, 'raster-opacity', opacity);
     }
 });
 
-// Use device location
-document.getElementById("myLocationBtn").addEventListener("click", () => {
-    if (!navigator.geolocation) {
-        alert("Your browser does not support location services.");
-        return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            updateLocation(position.coords.latitude, position.coords.longitude);
-        },
-        (error) => {
-            console.error("Geolocation error:", error);
-            alert("Unable to get your location. Please check your browser permissions.");
-        }
-    );
-});
-
-// ================================
-//  AUTO REFRESH
-// ================================
-setInterval(() => {
-    getRealtime();
-    getForecast();
-    getHistory();
-}, 300000); // Refresh every 5 minutes
+// Close weather panel
+document.getElementById('closePanel').addEventListener('click', hideWeatherPanel);
 
 // ================================
 //  INITIALIZATION
 // ================================
-document.getElementById("locationInput").value = `${lat},${lon}`;
 
-// Optional: Show debug output (uncomment to enable)
-// document.querySelector('.debug-section').style.display = 'block';
+// Update time display
+function updateTimeDisplay() {
+    const now = new Date();
+    document.getElementById('currentTime').textContent = 
+        now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Update time display every minute
+setInterval(updateTimeDisplay, 60000);
+updateTimeDisplay();
+
+// Auto-refresh radar every 5 minutes for realtime data
+setInterval(() => {
+    if (currentTimeMode === 'now') {
+        updateRadarLayer(currentRadarType, currentTimeMode);
+    }
+}, 300000);
+
+console.log('Weather Dashboard initialized successfully!');
+console.log('Click anywhere on the map to get weather information for that location.');
