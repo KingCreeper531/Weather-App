@@ -1,104 +1,141 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Storm Surge Weather</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <!-- Mapbox -->
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <meta charset="utf-8" />
+  <title>Weather Dashboard — Tomorrow.io + Mapbox</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html,body { height:100%; margin:0; font-family: Arial, sans-serif; }
+    #map { position: absolute; top:0; bottom:0; width:100%; }
+    #panel {
+      position: absolute; right:12px; top:12px; width:350px;
+      background: rgba(255,255,255,0.95); padding:12px; border-radius:8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      max-height: 80vh; overflow:auto;
+    }
+    button { margin:4px 0; width:100%; padding:8px; }
+    pre { background:#f7f7f7; padding:8px; border-radius:6px; font-size:13px; }
+  </style>
+
+  <!-- Mapbox GL JS -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 </head>
 <body>
-  <div class="app">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo-dot"></div>
-        <span class="brand-text">Storm Surge Weather</span>
-      </div>
-      <div class="controls">
-        <input id="locationInput" type="text" placeholder="Enter ZIP or city" />
-        <button id="goBtn" class="btn">Get weather</button>
-        <button id="unitToggle" class="chip">°F / °C</button>
-        <button id="refreshBtn" class="chip">Refresh now</button>
-      </div>
-    </header>
 
-    <div id="offlineBanner" class="offline-banner hidden"></div>
+<div id="map"></div>
 
-    <main class="split">
-      <section class="left">
-        <div id="map" class="map"></div>
-        <div class="map-actions">
-          <button id="locateBtn" class="chip">Center on location</button>
-        </div>
-        <div class="legend">
-          <span style="background:#9bffb5"></span> No rain
-          <span style="background:#00c853"></span> Light
-          <span style="background:#2196f3"></span> Moderate
-          <span style="background:#ff9800"></span> Heavy
-          <span style="background:#f44336"></span> Very heavy
-        </div>
-      </section>
+<div id="panel">
+  <h3>Weather Dashboard</h3>
+  
+  <input id="locInput" placeholder="lat,lng (e.g., 42.3478,-71.0466)" />
 
-      <section class="right">
-        <section id="nowCard" class="card card-hero hidden">
-          <div class="hero-left">
-            <div class="temp" id="nowTemp">--°</div>
-            <div class="summary" id="nowSummary">Enter a location to get started</div>
-            <div class="meta">
-              <span id="nowFeels">Feels like --°</span>
-              <span id="nowWind">Wind --</span>
-              <span id="nowHum">Humidity --%</span>
-            </div>
-          </div>
-          <div class="hero-right">
-            <svg id="icon" viewBox="0 0 64 64" class="weather-icon">
-              <circle cx="22" cy="22" r="12" class="icon-sun"></circle>
-              <ellipse cx="44" cy="36" rx="16" ry="10" class="icon-cloud"></ellipse>
-            </svg>
-          </div>
-          <div class="updated muted" id="updated-now"></div>
-        </section>
+  <button id="btnRealtime">Get Realtime</button>
+  <button id="btnForecast">Get Forecast</button>
+  <button id="btnHistory">Get Recent History</button>
 
-        <section class="card hidden" id="todayGrid">
-          <h2 class="card-title">Rest of today</h2>
-          <div class="hours" id="hours"></div>
-          <div class="updated muted" id="updated-today"></div>
-        </section>
+  <h4>Response:</h4>
+  <pre id="output">No data yet</pre>
 
-        <section class="card hidden" id="dailyGrid">
-          <h2 class="card-title">7‑day forecast</h2>
-          <div class="hours" id="days"></div>
-          <div class="updated muted" id="updated-daily"></div>
-        </section>
+  <h4>Overlay:</h4>
+  <select id="overlaySelect">
+    <option value="precipitationIntensity">Precipitation</option>
+    <option value="temperature">Temperature</option>
+    <option value="windSpeed">Wind Speed</option>
+    <option value="cloudCover">Cloud Cover</option>
+  </select>
+</div>
 
-        <section class="card hidden" id="waterCard">
-          <h2 class="card-title">Nearby rivers (USGS)</h2>
-          <div class="water-body">
-            <div id="water-status" class="muted">Loading…</div>
-            <div id="gauges" class="gauges"></div>
-          </div>
-          <div class="updated muted" id="updated-water"></div>
-        </section>
-      </section>
-    </main>
+<script>
+  // ==== CONFIG ====
+  const TOMORROW_KEY = "SxfCeG33LbiKBLlR5iEegtxw5aXnZEOr";  // your API key
+  const MAPBOX_TOKEN = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2aTlqeTN5OSJ9.QYtnuhdixR4SGxLQldE9PA";
 
-    <footer class="footer">
-      <span>Data: Tomorrow.io • AmbientWeather • USGS • Mapbox</span>
-      <span>Built by Jakob • Storm Surge Weather</span>
-    </footer>
-  </div>
+  mapboxgl.accessToken = MAPBOX_TOKEN;
 
-  <script>
-    window.SSW_TOMORROW_KEY = "YOUR_TOMORROW_IO_KEY";
-    window.SSW_AMBIENT_KEY = "YOUR_AMBIENT_KEY";
-    window.SSW_MAPBOX_TOKEN = "YOUR_MAPBOX_TOKEN";
-    window.SSW_ENABLE_MAP = true;
-  </script>
-  <script src="script.js"></script>
+  // ==== MAP ====
+  const map = new mapboxgl.Map({
+    container: "map",
+    style: "mapbox://styles/mapbox/light-v11",
+    center: [-71.0466, 42.3478],
+    zoom: 10
+  });
+
+  const RASTER_SOURCE = "tomorrow-weather";
+  const RASTER_LAYER = "tomorrow-weather-layer";
+
+  function updateOverlay(dataField) {
+    const ts = "now"; // you can make this dynamic later
+    const tileURL = `https://api.tomorrow.io/v4/map/tile/{z}/{x}/{y}/${dataField}/${ts}.png?apikey=${TOMORROW_KEY}`;
+
+    if (map.getSource(RASTER_SOURCE)) {
+      map.getSource(RASTER_SOURCE).setTiles([tileURL]);
+    } else {
+      map.addSource(RASTER_SOURCE, {
+        type: "raster",
+        tiles: [tileURL],
+        tileSize: 256
+      });
+
+      map.addLayer({
+        id: RASTER_LAYER,
+        type: "raster",
+        source: RASTER_SOURCE,
+        paint: { "raster-opacity": 0.7 }
+      });
+    }
+  }
+
+  map.on("load", () => {
+    updateOverlay("precipitationIntensity");
+  });
+
+  document.getElementById("overlaySelect").onchange = e => {
+    updateOverlay(e.target.value);
+  };
+
+  // ==== API CALLS ====
+
+  function fetchRealtime(lat, lng) {
+    return fetch(`https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lng}&apikey=${TOMORROW_KEY}`)
+      .then(res => res.json());
+  }
+
+  function fetchForecast(lat, lng) {
+    return fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lng}&apikey=${TOMORROW_KEY}`)
+      .then(res => res.json());
+  }
+
+  function fetchHistory(lat, lng) {
+    return fetch(`https://api.tomorrow.io/v4/weather/history/recent?location=${lat},${lng}&apikey=${TOMORROW_KEY}`)
+      .then(res => res.json());
+  }
+
+  function showOutput(obj) {
+    document.getElementById("output").innerText = JSON.stringify(obj, null, 2);
+  }
+
+  // ==== BUTTONS ====
+  document.getElementById("btnRealtime").onclick = () => {
+    const v = document.getElementById("locInput").value;
+    const [lat, lng] = v.split(",").map(x => parseFloat(x.trim()));
+    fetchRealtime(lat, lng).then(showOutput);
+  };
+
+  document.getElementById("btnForecast").onclick = () => {
+    const v = document.getElementById("locInput").value;
+    const [lat, lng] = v.split(",").map(x => parseFloat(x.trim()));
+    fetchForecast(lat, lng).then(showOutput);
+  };
+
+  document.getElementById("btnHistory").onclick = () => {
+    const v = document.getElementById("locInput").value;
+    const [lat, lng] = v.split(",").map(x => parseFloat(x.trim()));
+    fetchHistory(lat, lng).then(showOutput);
+  };
+
+  // initialize input
+  document.getElementById("locInput").value = "42.3478,-71.0466";
+</script>
 </body>
 </html>
