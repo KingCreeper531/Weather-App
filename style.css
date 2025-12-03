@@ -40,10 +40,11 @@ body {
 
 .controls { display: flex; gap: 10px; }
 .controls input {
-  width: 180px; padding: 10px 12px;
+  width: 220px; padding: 10px 12px;
   border-radius: 10px; border: 1px solid var(--border);
   color: var(--text); background: #0f1620;
 }
+.controls input::placeholder { color: #7f8ca1; }
 .controls input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(93,210,255,0.18);
@@ -78,7 +79,7 @@ main { margin-top: 16px; }
 
 /* Hero card */
 .card-hero { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 12px; }
-.hero-left .temp { font-size: 64px; font-weight: 700; }
+.hero-left .temp { font-size: 64px; font-weight: 700; letter-spacing: -1px; }
 .hero-left .summary { font-size: 18px; color: var(--muted); margin-top: 6px; }
 .hero-left .meta { display: flex; gap: 14px; margin-top: 10px; color: var(--muted); font-size: 14px; }
 .weather-icon { width: 100%; height: 160px; }
@@ -101,17 +102,27 @@ main { margin-top: 16px; }
 
 /* Alerts */
 .alerts { display: grid; gap: 8px; }
-.alert-banner { border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.alert-banner {
+  border-radius: 10px; padding: 10px 12px; font-size: 14px;
+}
 .alert-severe { background: #ff5252; color: #fff; }
 .alert-moderate { background: #ffb300; color: #1a1300; }
 .alert-minor { background: #8ab4f8; color: #0b2239; }
 
 /* Radar */
-.radar-wrap { display: flex; justify-content: center; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+.radar-wrap {
+  display: flex; justify-content: center;
+  border-radius: 12px; overflow: hidden; border: 1px solid var(--border);
+}
 .radar-wrap iframe { width: 100%; height: 420px; border: none; }
+.radar-fallback { color: var(--muted); text-align: center; margin-top: 8px; }
 
 /* Water gauges */
-.gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+.water-body { padding: 6px 0; }
+.gauges {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px; margin-top: 10px;
+}
 .gauge-card { background: #0f1620; border: 1px solid var(--border); border-radius: 12px; padding: 10px; }
 .gauge-title { font-weight: 600; }
 .gauge-values { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
@@ -130,3 +141,8 @@ main { margin-top: 16px; }
 /* Animations */
 @keyframes pulse { 0%,100%{transform:scale(1);}50%{transform:scale(1.1);} }
 @keyframes rise { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
+
+@media (max-width: 720px) {
+  .card-hero { grid-template-columns: 1fr; }
+  .weather-icon { height: 120px; }
+}

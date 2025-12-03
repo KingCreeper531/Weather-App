@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Storm Surge Weather</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- Inter font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -18,7 +17,7 @@
         <span class="brand-text">Storm Surge Weather</span>
       </div>
       <div class="controls">
-        <input id="zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP code (e.g. 43780)" />
+        <input id="locationInput" type="text" placeholder="Enter ZIP or city" />
         <button id="goBtn" class="btn">Get weather</button>
         <button id="unitToggle" class="chip">°F / °C</button>
         <button id="refreshBtn" class="chip">Refresh now</button>
@@ -31,7 +30,7 @@
       <section id="nowCard" class="card card-hero hidden">
         <div class="hero-left">
           <div class="temp" id="nowTemp">--°</div>
-          <div class="summary" id="nowSummary">Enter a ZIP to get started</div>
+          <div class="summary" id="nowSummary">Enter a location to get started</div>
           <div class="meta">
             <span id="nowFeels">Feels like --°</span>
             <span id="nowWind">Wind -- mph</span>
@@ -89,8 +88,8 @@
     </main>
 
     <footer class="footer">
-      <span>Data: NWS api.weather.gov • RainViewer • USGS Water Services</span>
-      <span>Built by Jakob • StormSurgeWeather (contact: stormsurgee025@gmail.com)</span>
+      <span>Data: Open‑Meteo • NWS • RainViewer • USGS</span>
+      <span>Built by Jakob • StormSurgeWeather</span>
     </footer>
   </div>
 
