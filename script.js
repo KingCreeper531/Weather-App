@@ -1,11 +1,16 @@
-// Storm Surge Weather — Tomorrow.io core build (Mapbox optional)
+// Storm Surge Weather — Tomorrow.io full integration (Realtime + Forecast + Recent History + Tiles)
 
 const TOMORROW_KEY = window.SSW_TOMORROW_KEY;
 const AMBIENT_API_KEY = window.SSW_AMBIENT_KEY;
-const ENABLE_MAP = Boolean(window.SSW_ENABLE_MAP);
-const MAPBOX_TOKEN = window.SSW_MAPBOX_TOKEN || "";
+const MAPBOX_TOKEN = window.SSW_MAPBOX_TOKEN;
+const ENABLE_MAP = true; // set false to disable map if needed
+
+// Units: "metric" or "imperial". We also keep UI toggle for °F/°C display formatting.
+let unitsApi = "metric"; // default Tomorrow.io response units
+let unitPrimary = localStorage.getItem("ssw-unit") || "F";
 
 let map = null;
+let radar = { frames: [], idx: 0, timer: null, speedMs: 800 };
 
 const input = document.getElementById("locationInput");
 const goBtn = document.getElementById("goBtn");
@@ -17,29 +22,24 @@ const nowCard = document.getElementById("nowCard");
 const todayGrid = document.getElementById("todayGrid");
 const dailyGrid = document.getElementById("dailyGrid");
 const waterCard = document.getElementById("waterCard");
+const offlineBanner = document.getElementById("offlineBanner");
 
-let unitPrimary = localStorage.getItem("ssw-unit") || "F";
 let lastLoc = JSON.parse(localStorage.getItem("ssw-last-loc") || "null");
 let refreshTimer = null;
 
-/* Optional Map init */
-if (ENABLE_MAP) {
-  try {
-    mapboxgl.accessToken = MAPBOX_TOKEN;
-    map = new mapboxgl.Map({
-      container: "map",
-      style: "mapbox://styles/mapbox/dark-v11",
-      center: [-82.0, 40.0],
-      zoom: 5
-    });
-    document.getElementById("map").classList.remove("hidden");
-    map.addControl(new mapboxgl.NavigationControl(), "top-right");
-  } catch (e) {
-    console.warn("Mapbox init failed; continuing without map.");
-  }
+// Map init
+if (ENABLE_MAP && typeof mapboxgl !== "undefined") {
+  mapboxgl.accessToken = MAPBOX_TOKEN;
+  map = new mapboxgl.Map({
+    container: "map",
+    style: "mapbox://styles/mapbox/dark-v11",
+    center: [-82.0, 40.0],
+    zoom: 5
+  });
+  map.addControl(new mapboxgl.NavigationControl(), "top-right");
 }
 
-/* Handlers */
+// Events
 goBtn.addEventListener("click", () => {
   const query = input.value.trim();
   if (!query) return;
@@ -73,8 +73,6 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     loadAll(lastLoc.lat, lastLoc.lon);
     setupAutoRefresh();
-  } else {
-    if (map) loadAmbientStations();
   }
 });
 
@@ -106,7 +104,7 @@ async function resolveLocation(query) {
 
     await loadAll(lat, lon);
     setupAutoRefresh();
-  } catch (e) {
+  } catch {
     showError("Location lookup failed");
   }
 }
@@ -121,9 +119,12 @@ function setupAutoRefresh() {
 async function loadAll(lat, lon) {
   let failures = 0;
   await Promise.allSettled([
-    loadWeather(lat, lon).catch(() => failures++),
+    loadRealtime(lat, lon).catch(() => failures++),
+    loadForecast(lat, lon).catch(() => failures++),
+    loadRecentHistory(lat, lon).catch(() => failures++),
     loadWater(lat, lon).catch(() => failures++),
-    (map ? loadAmbientStations().catch(() => failures++) : Promise.resolve())
+    (map ? loadAmbientStations().catch(() => failures++) : Promise.resolve()),
+    (map ? loadRadarFrames(lat, lon).catch(() => failures++) : Promise.resolve())
   ]);
 
   showCard(nowCard);
@@ -135,74 +136,182 @@ async function loadAll(lat, lon) {
   else clearOffline();
 }
 
-/* Weather via Tomorrow.io */
-async function loadWeather(lat, lon) {
-  try {
-    const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${TOMORROW_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Tomorrow.io fetch failed");
-    const data = await res.json();
-
-    renderNowTomorrow(data);
-    renderHoursTomorrow(data);
-    renderDailyTomorrow(data);
-
-    setUpdated("updated-now");
-    setUpdated("updated-today");
-    setUpdated("updated-daily");
-  } catch (e) {
-    showOffline("⚠️ Weather data unavailable");
-    showError("Failed to fetch forecast.");
-  }
+/* Tomorrow.io: Realtime */
+async function loadRealtime(lat, lon) {
+  const url = `https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lon}&units=${unitsApi}&apikey=${TOMORROW_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Realtime fetch failed");
+  const data = await res.json();
+  renderNowRealtime(data);
+  setUpdated("updated-now");
 }
 
-function renderNowTomorrow(data) {
-  const c = data.timelines?.current?.[0]?.values || {};
-  const temp = formatTemp(c.temperature);
-  const feels = formatTemp(c.temperatureApparent);
+/* Tomorrow.io: Forecast */
+async function loadForecast(lat, lon) {
+  const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&units=${unitsApi}&apikey=${TOMORROW_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Forecast fetch failed");
+  const data = await res.json();
+  renderHoursForecast(data);
+  renderDailyForecast(data);
+  setUpdated("updated-today");
+  setUpdated("updated-daily");
+}
+
+/* Tomorrow.io: Recent history (past ~24h) */
+async function loadRecentHistory(lat, lon) {
+  const url = `https://api.tomorrow.io/v4/weather/history/recent?location=${lat},${lon}&units=${unitsApi}&apikey=${TOMORROW_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("History fetch failed");
+  const data = await res.json();
+  // Optional: show a small inline history summary under current
+  renderHistorySummary(data);
+}
+
+/* Render: Now (Realtime) */
+function renderNowRealtime(data) {
+  const v = data?.data?.values || {};
+  const temp = formatTempFromUnits(v.temperature, unitsApi);
+  const feels = formatTempFromUnits(v.temperatureApparent, unitsApi);
 
   document.getElementById("nowTemp").textContent = temp;
   document.getElementById("nowFeels").textContent = `Feels like ${feels}`;
-  document.getElementById("nowWind").textContent = `Wind ${safeRound(c.windSpeed)} mph`;
-  document.getElementById("nowHum").textContent = `Humidity ${safeRound(c.humidity)}%`;
-  document.getElementById("nowSummary").textContent = codeToSummary(c.weatherCode);
-  setIconTheme(c.weatherCode);
+  document.getElementById("nowWind").textContent = `Wind ${safeRound(v.windSpeed)} ${unitsApi === "imperial" ? "mph" : "m/s"}`;
+  document.getElementById("nowHum").textContent = `Humidity ${safeRound(v.humidity)}%`;
+  document.getElementById("nowSummary").textContent = codeToSummary(v.weatherCode);
+  setIconTheme(v.weatherCode);
 }
 
-function renderHoursTomorrow(data) {
+/* Render: Hourly Forecast */
+function renderHoursForecast(data) {
   const hoursWrap = document.getElementById("hours");
   hoursWrap.innerHTML = "";
-  const hours = data.timelines?.hourly?.slice(0,8) || [];
+  const hours = data?.timelines?.hourly?.slice(0, 8) || [];
   for (const h of hours) {
     const t = new Date(h.time);
-    const v = h.values;
+    const v = h.values || {};
     const div = document.createElement("div");
     div.className = "hour";
     div.innerHTML = `
       <div class="h-time">${t.toLocaleTimeString([], {hour:"numeric"})}</div>
-      <div class="h-temp">${formatTemp(v.temperature)}</div>
+      <div class="h-temp">${formatTempFromUnits(v.temperature, unitsApi)}</div>
       <div class="h-meta">${codeToEmoji(v.weatherCode)} ${codeToSummary(v.weatherCode)}</div>
-      <div class="h-meta">💨 ${safeRound(v.windSpeed)} mph • 💧 ${safeRound(v.humidity)}% • ☔ ${safeFixed(v.precipitationIntensity, 2)}"</div>
+      <div class="h-meta">💨 ${safeRound(v.windSpeed)} ${unitsApi === "imperial" ? "mph" : "m/s"} • 💧 ${safeRound(v.humidity)}% • ☔ ${safeFixed(v.precipitationIntensity, 2)} ${unitsApi === "imperial" ? "in/hr" : "mm/hr"}</div>
     `;
     hoursWrap.appendChild(div);
   }
 }
 
-function renderDailyTomorrow(data) {
+/* Render: Daily Forecast with expandable details */
+function renderDailyForecast(data) {
   const daysWrap = document.getElementById("days");
   daysWrap.innerHTML = "";
-  const days = data.timelines?.daily?.slice(0,7) || [];
+  const days = data?.timelines?.daily?.slice(0, 7) || [];
   for (const d of days) {
     const t = new Date(d.time);
-    const v = d.values;
+    const v = d.values || {};
     const div = document.createElement("div");
-    div.className = "hour";
+    div.className = "hour expandable";
     div.innerHTML = `
       <div class="h-time">${t.toLocaleDateString([], {weekday:"short"})}</div>
-      <div class="h-temp">${formatTemp(v.temperatureMax)} / ${formatTemp(v.temperatureMin)}</div>
+      <div class="h-temp">${formatTempFromUnits(v.temperatureMax, unitsApi)} / ${formatTempFromUnits(v.temperatureMin, unitsApi)}</div>
       <div class="h-meta">${codeToEmoji(v.weatherCodeMax)} ${codeToSummary(v.weatherCodeMax)}</div>
+      <div class="h-details hidden">
+        💨 Wind (avg): ${safeRound(v.windSpeedAvg)} ${unitsApi === "imperial" ? "mph" : "m/s"}<br>
+        💧 Humidity (avg): ${safeRound(v.humidityAvg)}%<br>
+        ☔ Precip prob (avg): ${safeFixed(v.precipitationProbabilityAvg, 0)}%<br>
+        🌡️ UV Index (avg): ${safeRound(v.uvIndexAvg)}
+      </div>
     `;
+    div.addEventListener("click", () => {
+      div.querySelector(".h-details").classList.toggle("hidden");
+    });
     daysWrap.appendChild(div);
+  }
+}
+
+/* Render: History summary (optional inline) */
+function renderHistorySummary(data) {
+  // Example: last hourly entry temp/wind/precip
+  const last = data?.timelines?.hourly?.slice(-1)[0]?.values || null;
+  if (!last) return;
+  // You can add a subtle note under the hero card if desired.
+  // For now, no-op to avoid clutter.
+}
+
+/* Map helpers */
+function addCenterMarker(lat, lon) {
+  if (!map) return;
+  if (map.getSource("center-point")) {
+    map.removeLayer("center-point-layer");
+    map.removeSource("center-point");
+  }
+  map.addSource("center-point", { type: "geojson", data: { type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] } } });
+  map.addLayer({
+    id: "center-point-layer",
+    type: "circle",
+    source: "center-point",
+    paint: { "circle-radius": 6, "circle-color": "#5dd2ff", "circle-stroke-width": 2, "circle-stroke-color": "#0b0f14" }
+  });
+}
+
+/* Radar tiles — Tomorrow.io Weather Maps API
+   We fetch a list of timestamps (past + future) and animate a raster layer.
+*/
+async function loadRadarFrames(lat, lon) {
+  // Simple approach: fetch timestamps for precipitationIntensity.
+  // Tomorrow.io provides map tiles for the last 24h and forecast; we’ll generate a timeline near "now".
+  // Here we synthesize timestamps around now; replace with official timestamps if exposed to your plan.
+  const now = Date.now();
+  // Build +/- frames: past 60min every 10min plus next 30min every 10min
+  const frames = [];
+  for (let i = 6; i >= 0; i--) frames.push(Math.floor((now - i * 10 * 60 * 1000) / 1000)); // past
+  for (let i = 1; i <= 3; i++) frames.push(Math.floor((now + i * 10 * 60 * 1000) / 1000)); // near future
+  radar.frames = frames;
+  radar.idx = frames.length - 1; // start at latest
+  addRadarLayer(frames[radar.idx]);
+  startRadarLoop();
+}
+
+function radarTileUrl(timestamp) {
+  // Tomorrow.io Weather Maps tile template:
+  // https://api.tomorrow.io/v4/map/tile/{zoom}/{x}/{y}/precipitationIntensity/{timestamp}.png?apikey=KEY
+  return `https://api.tomorrow.io/v4/map/tile/{z}/{x}/{y}/precipitationIntensity/${timestamp}.png?apikey=${TOMORROW_KEY}`;
+}
+
+function addRadarLayer(timestamp) {
+  if (!map) return;
+  const sourceId = "radar";
+  const layerId = "radar-layer";
+  const tiles = [radarTileUrl(timestamp)];
+  if (map.getSource(sourceId)) {
+    // Update tiles by recreating source (Mapbox doesn't let you mutate tiles array directly)
+    try {
+      map.removeLayer(layerId);
+      map.removeSource(sourceId);
+    } catch {}
+  }
+  map.addSource(sourceId, { type: "raster", tiles, tileSize: 256 });
+  map.addLayer({
+    id: layerId,
+    type: "raster",
+    source: sourceId,
+    paint: { "raster-opacity": 0.7 }
+  });
+}
+
+function startRadarLoop() {
+  if (!map || radar.frames.length === 0) return;
+  stopRadarLoop();
+  radar.timer = setInterval(() => {
+    radar.idx = (radar.idx + 1) % radar.frames.length;
+    addRadarLayer(radar.frames[radar.idx]);
+  }, radar.speedMs);
+}
+function stopRadarLoop() {
+  if (radar.timer) {
+    clearInterval(radar.timer);
+    radar.timer = null;
   }
 }
 
@@ -253,13 +362,13 @@ async function loadWater(lat, lon) {
     }
 
     setUpdated("updated-water");
-  } catch (e) {
+  } catch {
     document.getElementById("water-status").textContent = "Error loading gauges.";
     showOffline("⚠️ River gauges unavailable");
   }
 }
 
-/* AmbientWeather integration (optional; requires map) */
+/* AmbientWeather station dots (optional; requires map) */
 async function loadAmbientStations() {
   if (!map) return;
   try {
@@ -282,9 +391,9 @@ async function loadAmbientStations() {
 
     const geojson = { type: "FeatureCollection", features };
 
-    if (map.getSource && map.getSource("ambient")) {
+    if (map.getSource("ambient")) {
       map.getSource("ambient").setData(geojson);
-    } else if (map.addSource) {
+    } else {
       map.addSource("ambient", { type: "geojson", data: geojson });
       map.addLayer({
         id: "ambient-layer",
@@ -321,28 +430,8 @@ async function loadAmbientStations() {
           .addTo(map);
       });
     }
-  } catch (err) {
+  } catch {
     showOffline("⚠️ AmbientWeather data unavailable");
-  }
-}
-
-/* Map helpers */
-function addCenterMarker(lat, lon) {
-  if (!map) return;
-  try {
-    if (map.getSource("center-point")) {
-      map.removeLayer("center-point-layer");
-      map.removeSource("center-point");
-    }
-    map.addSource("center-point", { type: "geojson", data: { type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] } } });
-    map.addLayer({
-      id: "center-point-layer",
-      type: "circle",
-      source: "center-point",
-      paint: { "circle-radius": 6, "circle-color": "#5dd2ff", "circle-stroke-width": 2, "circle-stroke-color": "#0b0f14" }
-    });
-  } catch (e) {
-    console.warn("Center marker failed:", e);
   }
 }
 
@@ -353,31 +442,33 @@ function showError(msg) {
   document.getElementById("nowTemp").textContent = `--°`;
   document.getElementById("nowSummary").textContent = msg;
   document.getElementById("nowFeels").textContent = `Feels like --°`;
-  document.getElementById("nowWind").textContent = `Wind -- mph`;
-  document.getElementById("nowHum").textContent = `Humidity --%`;
+  document.getElementById("nowWind").textContent = `Wind —`;
+  document.getElementById("nowHum").textContent = `Humidity —`;
 }
 function setUpdated(id) {
   const el = document.getElementById(id);
   if (el) el.textContent = "Last updated: " + new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
 }
 function showOffline(msg) {
-  const banner = document.getElementById("offlineBanner");
-  banner.textContent = msg;
-  banner.classList.remove("hidden");
+  offlineBanner.textContent = msg;
+  offlineBanner.classList.remove("hidden");
 }
 function clearOffline() {
-  const banner = document.getElementById("offlineBanner");
-  banner.classList.add("hidden");
+  offlineBanner.classList.add("hidden");
 }
 
 /* Formatting + conversions */
-function formatTemp(t) {
-  if (!Number.isFinite(t)) return "--°";
-  return unitPrimary === "F" ? `${Math.round(cToFMaybe(t))}°` : `${Math.round(cToCMaybe(t))}°`;
+function formatTempFromUnits(val, apiUnits) {
+  if (!Number.isFinite(val)) return "--°";
+  // If Tomorrow.io returns metric (C) and UI wants F, convert.
+  if (unitPrimary === "F" && apiUnits === "metric") {
+    return `${Math.round((val * 9) / 5 + 32)}°`;
+  }
+  if (unitPrimary === "C" && apiUnits === "imperial") {
+    return `${Math.round((val - 32) * 5 / 9)}°`;
+  }
+  return `${Math.round(val)}°`;
 }
-// Tomorrow.io returns temps in Celsius by default; if you later request units=imperial, adjust here:
-function cToFMaybe(c) { return (c * 9) / 5 + 32; }
-function cToCMaybe(c) { return c; }
 function safeRound(v) { return Number.isFinite(v) ? Math.round(v) : "—"; }
 function safeFixed(v, n) { return Number.isFinite(v) ? v.toFixed(n) : "0.00"; }
 
@@ -403,7 +494,7 @@ function parseUSGSInstant(json) {
   return { name, flow, stage, trend };
 }
 
-/* Weather code mapping (Tomorrow.io) */
+/* Tomorrow.io weather code mapping */
 function codeToSummary(code) {
   const map = {
     0: "Unknown",
@@ -467,8 +558,12 @@ function setIconTheme(code) {
   }
 }
 
-/* Re-render units when toggled */
+/* Unit re-render */
 function reRenderUnits() {
-  if (!lastLoc) return;
-  loadWeather(lastLoc.lat, lastLoc.lon);
+  // Flip API units to match UI selection for consistency
+  unitsApi = unitPrimary === "F" ? "imperial" : "metric";
+  if (lastLoc) {
+    loadRealtime(lastLoc.lat, lastLoc.lon);
+    loadForecast(lastLoc.lat, lastLoc.lon);
+  }
 }
