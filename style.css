@@ -111,13 +111,6 @@ body {
 .hour .h-temp { font-weight: 700; font-size: 18px; }
 .hour .h-meta { color: var(--muted); font-size: 12px; }
 
-/* Alerts */
-.alerts { display: grid; gap: 8px; }
-.alert-banner { border-radius: 10px; padding: 10px 12px; font-size: 14px; }
-.alert-severe { background: #ff5252; color: #fff; }
-.alert-moderate { background: #ffb300; color: #1a1300; }
-.alert-minor { background: #8ab4f8; color: #0b2239; }
-
 /* Water gauges */
 .water-body { padding: 6px 0; }
 .gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
