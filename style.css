@@ -1,7 +1,7 @@
 /* ========================================
      CSS STARTS HERE
      File: style.css
-     Storm Surge Weather Dashboard
+     Storm Surge Weather Dashboard - Enhanced
 ======================================== */
 
 /* ============================
@@ -41,6 +41,276 @@ html, body {
 }
 
 /* ============================
+   TOP MENU BAR
+============================ */
+.top-menu-bar {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 1000;
+}
+
+.menu-btn {
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.menu-btn:hover {
+    border-color: #00aaff;
+    background: rgba(0, 170, 255, 0.1);
+}
+
+.app-title {
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 12px 24px;
+    text-align: center;
+}
+
+.app-title h1 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #00aaff;
+    margin-bottom: 2px;
+}
+
+.app-title p {
+    font-size: 0.75rem;
+    color: #00ff88;
+}
+
+.top-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.icon-btn {
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 12px;
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.icon-btn:hover {
+    border-color: #00aaff;
+    background: rgba(0, 170, 255, 0.1);
+}
+
+/* ============================
+   SIDE MENU
+============================ */
+.side-menu {
+    position: absolute;
+    top: 90px;
+    left: 20px;
+    width: 320px;
+    max-height: calc(100vh - 110px);
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    z-index: 999;
+    overflow-y: auto;
+    transition: all 0.3s ease;
+}
+
+.side-menu.hidden {
+    transform: translateX(-120%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.side-menu h3 {
+    color: #00aaff;
+    font-size: 1.2rem;
+    margin-bottom: 20px;
+}
+
+.menu-section {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.menu-section:last-child {
+    border-bottom: none;
+}
+
+.menu-section label {
+    display: block;
+    font-size: 0.9rem;
+    color: #ccc;
+    margin-bottom: 8px;
+}
+
+.menu-section select {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #fff;
+    padding: 10px;
+    font-size: 0.9rem;
+}
+
+.menu-section select:focus {
+    outline: none;
+    border-color: #00aaff;
+}
+
+.toggles {
+    border-bottom: none;
+}
+
+.toggle-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    cursor: pointer;
+}
+
+.toggle-item span {
+    font-size: 0.9rem;
+}
+
+.toggle-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #00aaff;
+    cursor: pointer;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+}
+
+.mode-btn {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #fff;
+    padding: 10px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mode-btn:hover {
+    background: rgba(0, 170, 255, 0.2);
+}
+
+.mode-btn.active {
+    background: #00aaff;
+    border-color: #00aaff;
+    color: #000;
+    font-weight: 600;
+}
+
+/* ============================
+   WARNINGS PANEL
+============================ */
+.warnings-panel {
+    position: absolute;
+    top: 90px;
+    right: 20px;
+    width: 380px;
+    max-height: calc(100vh - 110px);
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    z-index: 999;
+    overflow-y: auto;
+}
+
+.warnings-header {
+    margin-bottom: 16px;
+}
+
+.warnings-header h3 {
+    color: #ff6b35;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.warnings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.warning-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.warning-card:hover {
+    border-color: #00aaff;
+    background: rgba(0, 170, 255, 0.1);
+}
+
+.warning-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.warning-type {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #000;
+}
+
+.warning-info-btn {
+    background: transparent;
+    border: none;
+    color: #00aaff;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.warning-card-body {
+    font-size: 0.85rem;
+    color: #ccc;
+}
+
+.warning-card-body div {
+    margin-bottom: 4px;
+}
+
+/* ============================
    BRANDING
 ============================ */
 .branding {
@@ -72,7 +342,7 @@ html, body {
 ============================ */
 .data-status {
     position: absolute;
-    top: 20px;
+    bottom: 20px;
     left: 20px;
     background: rgba(26, 26, 26, 0.95);
     backdrop-filter: blur(15px);
@@ -105,10 +375,10 @@ html, body {
 ============================ */
 .search-container {
     position: absolute;
-    top: 20px;
+    top: 90px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 1000;
+    z-index: 998;
     width: 400px;
     max-width: calc(100vw - 40px);
 }
@@ -187,7 +457,7 @@ html, body {
 ============================ */
 .radar-animation-controls {
     position: absolute;
-    top: 20px;
+    bottom: 80px;
     right: 20px;
     background: rgba(40, 40, 50, 0.95);
     backdrop-filter: blur(10px);
@@ -292,10 +562,10 @@ html, body {
 ============================ */
 .weather-panel {
     position: absolute;
-    top: 70px;
+    top: 170px;
     left: 20px;
     width: 380px;
-    max-height: calc(100vh - 90px);
+    max-height: calc(100vh - 190px);
     background: rgba(26, 26, 26, 0.95);
     backdrop-filter: blur(15px);
     border-radius: 16px;
@@ -349,7 +619,7 @@ html, body {
 .panel-content {
     padding: 20px;
     overflow-y: auto;
-    max-height: calc(100vh - 170px);
+    max-height: calc(100vh - 270px);
 }
 
 .location-info {
@@ -371,7 +641,7 @@ html, body {
 }
 
 /* ============================
-   WARNINGS SECTION
+   WARNINGS SECTION IN PANEL
 ============================ */
 .warnings-section {
     margin-bottom: 20px;
@@ -389,36 +659,6 @@ html, body {
     color: #ff6b35;
     margin-bottom: 12px;
     font-size: 1rem;
-}
-
-.warnings-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.warning-item {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 10px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.warning-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.warning-title {
-    font-weight: 600;
-    color: #ff6b35;
-    font-size: 0.9rem;
-    margin-bottom: 4px;
-}
-
-.warning-time {
-    font-size: 0.75rem;
-    color: #999;
 }
 
 .current-weather {
@@ -560,8 +800,8 @@ html, body {
 ============================ */
 .radar-controls {
     position: absolute;
-    bottom: 140px;
-    left: 20px;
+    bottom: 260px;
+    right: 20px;
     background: rgba(40, 40, 50, 0.95);
     backdrop-filter: blur(10px);
     border-radius: 12px;
@@ -621,8 +861,8 @@ html, body {
 ============================ */
 .radar-legend {
     position: absolute;
-    bottom: 20px;
-    left: 20px;
+    bottom: 80px;
+    left: 180px;
     background: rgba(40, 40, 50, 0.95);
     backdrop-filter: blur(10px);
     border-radius: 12px;
@@ -688,6 +928,283 @@ html, body {
 }
 
 /* ============================
+   MULTI-PANEL DISPLAY
+============================ */
+.multi-panel-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    background: #1a1a1a;
+    transition: opacity 0.3s ease;
+}
+
+.multi-panel-container.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px;
+    padding: 10px;
+    height: 100%;
+}
+
+.radar-panel {
+    background: #2a2a2a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+.panel-label {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: #00aaff;
+    z-index: 10;
+}
+
+/* ============================
+   MODALS
+============================ */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-content.warning-modal {
+    max-width: 800px;
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    font-size: 1.3rem;
+    color: #00aaff;
+}
+
+.close-modal-btn {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 2rem;
+    cursor: pointer;
+    padding: 0;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.close-modal-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.warning-info-grid {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.info-label {
+    color: #999;
+    font-size: 0.9rem;
+}
+
+.info-value {
+    color: #fff;
+    font-weight: 500;
+}
+
+.warning-section {
+    margin-bottom: 20px;
+}
+
+.warning-section h3 {
+    color: #00aaff;
+    font-size: 1rem;
+    margin-bottom: 10px;
+}
+
+.warning-section p {
+    color: #ccc;
+    line-height: 1.6;
+}
+
+.hazards-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.hazard-tag {
+    background: rgba(255, 69, 0, 0.2);
+    border: 1px solid #ff4500;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: #ff6b35;
+}
+
+.areas-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.area-item {
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.action-btn {
+    flex: 1;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.action-btn.primary {
+    background: #00aaff;
+    color: #fff;
+}
+
+.action-btn.primary:hover {
+    background: #0088cc;
+}
+
+.action-btn.secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.action-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.action-btn.full-width {
+    width: 100%;
+}
+
+/* Keyboard Shortcuts Modal */
+.shortcuts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.shortcut-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+}
+
+.shortcut-item kbd {
+    background: rgba(0, 170, 255, 0.2);
+    border: 1px solid #00aaff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9rem;
+    color: #00aaff;
+}
+
+/* Feedback Modal */
+#feedbackText {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    margin-bottom: 16px;
+}
+
+#feedbackText:focus {
+    outline: none;
+    border-color: #00aaff;
+}
+
+/* ============================
    WARNING POPUP STYLES
 ============================ */
 .mapboxgl-popup-content {
@@ -738,6 +1255,10 @@ html, body {
     .weather-panel {
         width: 350px;
     }
+    
+    .warnings-panel {
+        width: 350px;
+    }
 }
 
 @media (max-width: 1024px) {
@@ -745,23 +1266,34 @@ html, body {
         font-size: 1.75rem;
     }
     
-    .radar-animation-controls {
-        min-width: 260px;
-    }
-    
-    .weather-panel {
-        width: 340px;
+    .side-menu {
+        width: 300px;
     }
 }
 
 @media (max-width: 768px) {
+    .top-menu-bar {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+    }
+    
+    .app-title h1 {
+        font-size: 1.1rem;
+    }
+    
+    .app-title p {
+        font-size: 0.7rem;
+    }
+    
     .search-container {
         width: calc(100vw - 20px);
-        top: 10px;
+        top: 70px;
     }
     
     .data-status {
-        top: 65px;
+        top: auto;
+        bottom: 10px;
         left: 10px;
         font-size: 0.7rem;
         padding: 6px 10px;
@@ -769,19 +1301,33 @@ html, body {
         gap: 4px;
     }
     
+    .side-menu {
+        top: 70px;
+        left: 10px;
+        width: calc(100vw - 20px);
+        max-width: 350px;
+    }
+    
+    .warnings-panel {
+        top: 70px;
+        right: 10px;
+        width: calc(100vw - 20px);
+        max-width: 350px;
+    }
+    
     .radar-animation-controls {
-        top: 100px;
+        bottom: 60px;
         right: 10px;
         min-width: 240px;
     }
     
     .weather-panel {
-        top: 100px;
+        top: 70px;
         left: 10px;
         right: 10px;
         width: calc(100vw - 20px);
         max-width: 100%;
-        max-height: calc(100vh - 110px);
+        max-height: calc(100vh - 80px);
     }
     
     .radar-controls {
@@ -789,22 +1335,13 @@ html, body {
         right: auto;
         width: auto;
         max-width: calc(100vw - 20px);
-        bottom: 130px;
-    }
-    
-    .control-group {
-        flex-wrap: wrap;
-    }
-    
-    .control-group label {
-        min-width: auto;
+        bottom: 240px;
     }
     
     .radar-legend {
         left: 10px;
-        right: auto;
         bottom: 60px;
-        max-width: calc(100vw - 20px);
+        max-width: calc(50vw - 15px);
     }
     
     .branding {
@@ -823,11 +1360,24 @@ html, body {
     #currentTemp {
         font-size: 2.5rem;
     }
+    
+    .weather-details {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 480px) {
-    .search-container {
-        width: calc(100vw - 20px);
+    .top-actions {
+        gap: 6px;
+    }
+    
+    .icon-btn {
+        padding: 10px;
+        font-size: 1rem;
+    }
+    
+    .menu-btn {
+        padding: 10px 12px;
     }
     
     .radar-animation-controls {
@@ -852,11 +1402,7 @@ html, body {
     }
     
     .weather-panel {
-        top: 100px;
-    }
-    
-    .weather-details {
-        grid-template-columns: 1fr;
+        top: 70px;
     }
     
     .hourly-item {
@@ -864,7 +1410,7 @@ html, body {
     }
     
     .radar-controls {
-        bottom: 120px;
+        bottom: 220px;
         padding: 12px;
     }
     
@@ -927,28 +1473,40 @@ html, body {
 ============================ */
 .panel-content::-webkit-scrollbar,
 .hourly-container::-webkit-scrollbar,
-.search-results::-webkit-scrollbar {
+.search-results::-webkit-scrollbar,
+.warnings-list::-webkit-scrollbar,
+.side-menu::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
 
 .panel-content::-webkit-scrollbar-track,
 .hourly-container::-webkit-scrollbar-track,
-.search-results::-webkit-scrollbar-track {
+.search-results::-webkit-scrollbar-track,
+.warnings-list::-webkit-scrollbar-track,
+.side-menu::-webkit-scrollbar-track,
+.modal-body::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 3px;
 }
 
 .panel-content::-webkit-scrollbar-thumb,
 .hourly-container::-webkit-scrollbar-thumb,
-.search-results::-webkit-scrollbar-thumb {
+.search-results::-webkit-scrollbar-thumb,
+.warnings-list::-webkit-scrollbar-thumb,
+.side-menu::-webkit-scrollbar-thumb,
+.modal-body::-webkit-scrollbar-thumb {
     background: rgba(0, 170, 255, 0.5);
     border-radius: 3px;
 }
 
 .panel-content::-webkit-scrollbar-thumb:hover,
 .hourly-container::-webkit-scrollbar-thumb:hover,
-.search-results::-webkit-scrollbar-thumb:hover {
+.search-results::-webkit-scrollbar-thumb:hover,
+.warnings-list::-webkit-scrollbar-thumb:hover,
+.side-menu::-webkit-scrollbar-thumb:hover,
+.modal-body::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 170, 255, 0.7);
 }
 
@@ -967,6 +1525,33 @@ html, body {
 
 .pulse {
     animation: pulse 2s infinite;
+}
+
+/* ============================
+   UTILITY CLASSES
+============================ */
+.hidden {
+    display: none !important;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.mb-2 {
+    margin-bottom: 8px;
+}
+
+.mb-4 {
+    margin-bottom: 16px;
+}
+
+.mt-2 {
+    margin-top: 8px;
+}
+
+.mt-4 {
+    margin-top: 16px;
 }
 
 /* ========================================

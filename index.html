@@ -1,7 +1,7 @@
 <!-- ========================================
      HTML STARTS HERE
      File: index.html
-     Storm Surge Weather Dashboard
+     Storm Surge Weather Dashboard - Enhanced
 ======================================== -->
 <!doctype html>
 <html lang="en">
@@ -22,6 +22,114 @@
 
 <div class="container">
   <div id="map"></div>
+
+  <!-- Top Menu Bar -->
+  <div class="top-menu-bar">
+    <button id="menuBtn" class="menu-btn">☰</button>
+    
+    <div class="app-title">
+      <h1>Storm Surge Weather</h1>
+      <p>NEXRAD Level II · Dual-Pol</p>
+    </div>
+
+    <div class="top-actions">
+      <button id="keyboardBtn" class="icon-btn" title="Keyboard Shortcuts (?)">⌨️</button>
+      <button id="feedbackBtn" class="icon-btn" title="Send Feedback">💬</button>
+    </div>
+  </div>
+
+  <!-- Side Menu -->
+  <div id="sideMenu" class="side-menu hidden">
+    <h3>Settings</h3>
+    
+    <div class="menu-section">
+      <label>Radar Product</label>
+      <select id="radarProduct">
+        <option value="composite">Composite Reflectivity</option>
+        <option value="base">Base Reflectivity</option>
+        <option value="velocity">Base Velocity</option>
+        <option value="spectrum">Spectrum Width</option>
+        <option value="correlation">Correlation Coefficient</option>
+        <option value="differential">Differential Reflectivity</option>
+        <option value="kdp">Specific Differential Phase</option>
+        <option value="precip">One-Hour Precipitation</option>
+        <option value="storm-total">Storm Total Precipitation</option>
+      </select>
+    </div>
+
+    <div class="menu-section">
+      <label>Tilt Angle</label>
+      <select id="tiltAngle">
+        <option value="0.5">0.5°</option>
+        <option value="0.9">0.9°</option>
+        <option value="1.3">1.3°</option>
+        <option value="1.8">1.8°</option>
+        <option value="2.4">2.4°</option>
+        <option value="3.1">3.1°</option>
+        <option value="4.0">4.0°</option>
+        <option value="5.1">5.1°</option>
+        <option value="6.4">6.4°</option>
+        <option value="8.0">8.0°</option>
+        <option value="10.0">10.0°</option>
+        <option value="12.0">12.0°</option>
+        <option value="14.6">14.6°</option>
+        <option value="19.5">19.5°</option>
+      </select>
+    </div>
+
+    <div class="menu-section toggles">
+      <label class="toggle-item">
+        <span>Lightning</span>
+        <input type="checkbox" id="toggleLightning" checked>
+      </label>
+      <label class="toggle-item">
+        <span>Storm Fronts</span>
+        <input type="checkbox" id="toggleFronts" checked>
+      </label>
+      <label class="toggle-item">
+        <span>SPC Outlooks</span>
+        <input type="checkbox" id="toggleSPC" checked>
+      </label>
+      <label class="toggle-item">
+        <span>MPING Reports</span>
+        <input type="checkbox" id="toggleMPING">
+      </label>
+      <label class="toggle-item">
+        <span>TVS Signatures</span>
+        <input type="checkbox" id="toggleTVS" checked>
+      </label>
+      <label class="toggle-item">
+        <span>Storm Tracks</span>
+        <input type="checkbox" id="toggleStormTracks" checked>
+      </label>
+      <label class="toggle-item">
+        <span>Multi-Panel Display</span>
+        <input type="checkbox" id="toggleMultiPanel">
+      </label>
+      <label class="toggle-item">
+        <span>TDWR Radars</span>
+        <input type="checkbox" id="toggleTDWR">
+      </label>
+    </div>
+
+    <div class="menu-section">
+      <label>Map Mode</label>
+      <div class="button-group">
+        <button id="map2D" class="mode-btn">2D</button>
+        <button id="map3D" class="mode-btn active">3D</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Warnings Panel -->
+  <div id="warningsPanel" class="warnings-panel">
+    <div class="warnings-header">
+      <h3>⚠️ Active Warnings (<span id="warningCount">0</span>)</h3>
+    </div>
+    <div id="warningsList" class="warnings-list">
+      <!-- Warnings will be populated by JavaScript -->
+    </div>
+  </div>
 
   <!-- Search Bar -->
   <div class="search-container">
@@ -80,7 +188,7 @@
       <!-- Active Warnings Section -->
       <div id="warningsSection" class="warnings-section hidden">
         <h4>⚠️ Active Alerts</h4>
-        <div id="warningsList" class="warnings-list"></div>
+        <div id="localWarningsList" class="warnings-list"></div>
       </div>
 
       <div class="current-weather">
@@ -149,8 +257,8 @@
   <div class="radar-controls">
     <div class="control-group">
       <label>Radar:</label>
-      <select id="radarType">
-        <option value="composite">Composite Reflectivity</option>
+      <select id="radarTypeQuick">
+        <option value="composite">Composite</option>
         <option value="precipitation">Precipitation Type</option>
         <option value="base">Base Reflectivity</option>
         <option value="velocity">Velocity</option>
@@ -215,6 +323,143 @@
   <div class="data-status">
     <span id="radarStatus">🟢 Live</span>
     <span id="lastUpdate">Updated: --</span>
+  </div>
+
+  <!-- Multi-Panel Container (hidden by default) -->
+  <div id="multiPanelContainer" class="multi-panel-container hidden">
+    <div class="panel-grid">
+      <div class="radar-panel">
+        <div class="panel-label">Composite Reflectivity</div>
+      </div>
+      <div class="radar-panel">
+        <div class="panel-label">Base Velocity</div>
+      </div>
+      <div class="radar-panel">
+        <div class="panel-label">Correlation Coefficient</div>
+      </div>
+      <div class="radar-panel">
+        <div class="panel-label">Lightning</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Warning Details Modal -->
+<div id="warningModal" class="modal hidden">
+  <div class="modal-content warning-modal">
+    <div id="modalHeader" class="modal-header">
+      <h2 id="modalTitle">Warning Title</h2>
+      <button id="closeModal" class="close-modal-btn">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="warning-info-grid">
+        <div class="info-row">
+          <span class="info-label">Issued:</span>
+          <span id="modalIssued" class="info-value">--</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Expires:</span>
+          <span id="modalExpires" class="info-value">--</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Source:</span>
+          <span id="modalSource" class="info-value">--</span>
+        </div>
+      </div>
+
+      <div class="warning-section">
+        <h3>Hazards:</h3>
+        <div id="modalHazards" class="hazards-list"></div>
+      </div>
+
+      <div class="warning-section">
+        <h3>Impacts:</h3>
+        <p id="modalImpacts">--</p>
+      </div>
+
+      <div class="warning-section">
+        <h3>Description:</h3>
+        <p id="modalDescription">--</p>
+      </div>
+
+      <div class="warning-section">
+        <h3>Affected Areas:</h3>
+        <div id="modalAreas" class="areas-list"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="playAlertBtn" class="action-btn primary">🔊 Play Alert</button>
+        <button id="shareAlertBtn" class="action-btn secondary">Share</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Keyboard Shortcuts Modal -->
+<div id="keyboardModal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Keyboard Shortcuts</h2>
+      <button class="close-modal-btn" onclick="document.getElementById('keyboardModal').classList.add('hidden')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="shortcuts-list">
+        <div class="shortcut-item">
+          <kbd>Space</kbd>
+          <span>Play/Pause Animation</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>L</kbd>
+          <span>Toggle Lightning</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>F</kbd>
+          <span>Toggle Storm Fronts</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>W</kbd>
+          <span>Toggle Warnings</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>M</kbd>
+          <span>Toggle Multi-Panel</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>2 / 3</kbd>
+          <span>Switch 2D/3D View</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>T</kbd>
+          <span>Toggle Storm Tracks</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>V</kbd>
+          <span>Toggle TVS Signatures</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>←/→</kbd>
+          <span>Navigate Time Frames</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>?</kbd>
+          <span>Show This Help</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Feedback Modal -->
+<div id="feedbackModal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Send Feedback</h2>
+      <button class="close-modal-btn" onclick="document.getElementById('feedbackModal').classList.add('hidden')">×</button>
+    </div>
+    <div class="modal-body">
+      <textarea id="feedbackText" placeholder="Tell us what you think or report an issue..." rows="6"></textarea>
+      <button id="submitFeedback" class="action-btn primary full-width">Submit Feedback</button>
+    </div>
   </div>
 </div>
 

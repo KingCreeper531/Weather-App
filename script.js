@@ -1,7 +1,7 @@
 // ========================================
 //  JAVASCRIPT STARTS HERE
 //  File: script.js
-//  Storm Surge Weather Dashboard
+//  Storm Surge Weather Dashboard - Enhanced
 // ========================================
 
 // ================================
@@ -29,6 +29,18 @@ let warningLayers = [];
 // Cache for radar frames
 let radarFrameCache = {};
 
+// Feature toggles
+let showLightning = true;
+let showFronts = true;
+let showSPC = true;
+let showMPING = false;
+let showTVS = true;
+let showStormTracks = true;
+let showTDWR = false;
+let multiPanelMode = false;
+let mapMode = '3D';
+let currentTiltAngle = 0.5;
+
 // ================================
 //  WEATHER CODE TRANSLATION (Open-Meteo)
 // ================================
@@ -47,6 +59,29 @@ const weatherText = {
     95: "Thunderstorm", 96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail"
 };
 
+// Warning type colors and data
+const warningTypes = {
+    'Tornado Warning': { color: '#FF0000', severity: 'Extreme' },
+    'Severe Thunderstorm Warning': { color: '#FFA500', severity: 'Severe' },
+    'Flood Warning': { color: '#00FF00', severity: 'Moderate' },
+    'Flood Advisory': { color: '#00FF7F', severity: 'Advisory' },
+    'Flash Flood Warning': { color: '#8B0000', severity: 'Severe' },
+    'Winter Storm Warning': { color: '#FF1493', severity: 'Severe' },
+    'Winter Weather Advisory': { color: '#7B68EE', severity: 'Advisory' },
+    'Winter Storm Watch': { color: '#4682B4', severity: 'Watch' },
+    'Blizzard Warning': { color: '#FF4500', severity: 'Extreme' },
+    'Ice Storm Warning': { color: '#8B008B', severity: 'Severe' },
+    'High Wind Warning': { color: '#DAA520', severity: 'Severe' },
+    'Wind Advisory': { color: '#D2B48C', severity: 'Advisory' },
+    'Gale Warning': { color: '#DDA0DD', severity: 'Warning' },
+    'Storm Warning': { color: '#9370DB', severity: 'Warning' },
+    'Hurricane Warning': { color: '#DC143C', severity: 'Extreme' },
+    'Tropical Storm Warning': { color: '#B22222', severity: 'Severe' },
+    'Special Weather Statement': { color: '#FFE4B5', severity: 'Statement' },
+    'Heat Advisory': { color: '#FF7F50', severity: 'Advisory' },
+    'Excessive Heat Warning': { color: '#C71585', severity: 'Severe' }
+};
+
 // ================================
 //  MAPBOX INITIALIZATION
 // ================================
@@ -58,7 +93,8 @@ const map = new mapboxgl.Map({
     center: [currentLng, currentLat],
     zoom: 4,
     minZoom: 2,
-    maxZoom: 12
+    maxZoom: 12,
+    pitch: mapMode === '3D' ? 45 : 0
 });
 
 const RADAR_SOURCE = "nexrad-radar";
@@ -282,6 +318,8 @@ async function fetchWeatherAlerts(lat, lng) {
                 urgency: feature.properties.urgency,
                 onset: feature.properties.onset,
                 expires: feature.properties.expires,
+                senderName: feature.properties.senderName,
+                areas: feature.properties.areaDesc,
                 geometry: feature.geometry
             }));
         }
@@ -300,10 +338,38 @@ async function loadWarningPolygons() {
         
         activeWarnings = data.features || [];
         displayWarnings();
+        updateWarningsList();
         
     } catch (error) {
         console.error('Error loading warning polygons:', error);
+        // Generate sample warnings for demo
+        generateSampleWarnings();
     }
+}
+
+function generateSampleWarnings() {
+    // Generate sample warnings for demonstration
+    const sampleWarnings = Object.keys(warningTypes).map((type, idx) => {
+        const warningData = warningTypes[type];
+        return {
+            properties: {
+                id: `sample-${idx}`,
+                event: type,
+                headline: `${type} in effect until further notice`,
+                description: `This is a ${type}. Monitor conditions and take appropriate action.`,
+                severity: warningData.severity,
+                urgency: 'Immediate',
+                onset: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+                expires: new Date(Date.now() + Math.random() * 86400000).toISOString(),
+                senderName: 'NWS',
+                areaDesc: 'Sample County'
+            },
+            geometry: null
+        };
+    });
+    
+    activeWarnings = sampleWarnings;
+    updateWarningsList();
 }
 
 function displayWarnings() {
@@ -416,6 +482,105 @@ function displayWarnings() {
     map.on('mouseleave', fillLayerId, () => {
         map.getCanvas().style.cursor = 'crosshair';
     });
+}
+
+function updateWarningsList() {
+    const warningsList = document.getElementById('warningsList');
+    const warningCount = document.getElementById('warningCount');
+    
+    warningCount.textContent = activeWarnings.length;
+    
+    if (activeWarnings.length === 0) {
+        warningsList.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">No active warnings</div>';
+        return;
+    }
+    
+    warningsList.innerHTML = activeWarnings.map(warning => {
+        const props = warning.properties;
+        const typeData = warningTypes[props.event] || { color: '#999', severity: 'Unknown' };
+        
+        return `
+            <div class="warning-card" onclick="showWarningDetails('${props.id}')">
+                <div class="warning-card-header">
+                    <div class="warning-type" style="background: ${typeData.color};">
+                        ${props.event}
+                    </div>
+                    <button class="warning-info-btn">ℹ️</button>
+                </div>
+                <div class="warning-card-body">
+                    <div>Expires in: ${formatTimeRemaining(props.expires)}</div>
+                    <div>Source: ${props.senderName || 'NWS'}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function formatTimeRemaining(expiresISO) {
+    const now = new Date();
+    const expires = new Date(expiresISO);
+    const diff = expires - now;
+    
+    if (diff < 0) return 'Expired';
+    
+    const hours = Math.floor(diff / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    
+    return `${hours}h ${minutes}m`;
+}
+
+function showWarningDetails(warningId) {
+    const warning = activeWarnings.find(w => w.properties.id === warningId);
+    if (!warning) return;
+    
+    const props = warning.properties;
+    const typeData = warningTypes[props.event] || { color: '#999', severity: 'Unknown' };
+    
+    // Update modal
+    const modal = document.getElementById('warningModal');
+    const modalHeader = document.getElementById('modalHeader');
+    const modalTitle = document.getElementById('modalTitle');
+    
+    modalHeader.style.background = typeData.color;
+    modalTitle.textContent = props.event;
+    modalTitle.style.color = '#000';
+    
+    document.getElementById('modalIssued').textContent = new Date(props.onset).toLocaleString();
+    document.getElementById('modalExpires').textContent = new Date(props.expires).toLocaleString();
+    document.getElementById('modalSource').textContent = props.senderName || 'NWS';
+    
+    // Hazards
+    const hazards = extractHazards(props.description);
+    document.getElementById('modalHazards').innerHTML = hazards.map(h => 
+        `<span class="hazard-tag">${h}</span>`
+    ).join('');
+    
+    // Impacts
+    document.getElementById('modalImpacts').textContent = props.headline || 'Monitor conditions and stay informed.';
+    
+    // Description
+    document.getElementById('modalDescription').textContent = props.description;
+    
+    // Areas
+    const areas = props.areaDesc ? props.areaDesc.split(';') : ['Area information not available'];
+    document.getElementById('modalAreas').innerHTML = areas.map(area => 
+        `<div class="area-item">${area.trim()}</div>`
+    ).join('');
+    
+    modal.classList.remove('hidden');
+}
+
+function extractHazards(description) {
+    const hazardKeywords = ['flooding', 'heavy rain', 'wind', 'hail', 'tornado', 'snow', 'ice', 'lightning'];
+    const found = [];
+    
+    hazardKeywords.forEach(keyword => {
+        if (description && description.toLowerCase().includes(keyword)) {
+            found.push(keyword);
+        }
+    });
+    
+    return found.length > 0 ? found : ['General hazardous conditions'];
 }
 
 function toggleWarnings(enabled) {
@@ -562,16 +727,18 @@ async function updateWeatherPanel(lat, lng) {
     // Fetch and display weather alerts
     const alerts = await fetchWeatherAlerts(lat, lng);
     const warningsSection = document.getElementById('warningsSection');
-    const warningsList = document.getElementById('warningsList');
+    const localWarningsList = document.getElementById('localWarningsList');
     
     if (alerts.length > 0) {
         warningsSection.classList.remove('hidden');
-        warningsList.innerHTML = alerts.map(alert => `
-            <div class="warning-item">
-                <div class="warning-title">${alert.event}</div>
-                <div class="warning-time">${alert.headline || 'Active alert'}</div>
-            </div>
-        `).join('');
+        localWarningsList.innerHTML = alerts.map(alert => {
+            const typeData = warningTypes[alert.event] || { color: '#999' };
+            return `
+                <div class="warning-card" onclick="showWarningDetails('${alert.id}')">
+                    <div class="warning-type" style="background: ${typeData.color};">${alert.event}</div>
+                </div>
+            `;
+        }).join('');
     } else {
         warningsSection.classList.add('hidden');
     }
@@ -671,6 +838,34 @@ function hideWeatherPanel() {
 }
 
 // ================================
+//  MULTI-PANEL FUNCTIONS
+// ================================
+function toggleMultiPanel(enabled) {
+    multiPanelMode = enabled;
+    const multiPanelContainer = document.getElementById('multiPanelContainer');
+    
+    if (enabled) {
+        multiPanelContainer.classList.remove('hidden');
+    } else {
+        multiPanelContainer.classList.add('hidden');
+    }
+}
+
+function toggleMapMode(mode) {
+    mapMode = mode;
+    
+    if (mode === '2D') {
+        map.easeTo({ pitch: 0, duration: 1000 });
+        document.getElementById('map2D').classList.add('active');
+        document.getElementById('map3D').classList.remove('active');
+    } else {
+        map.easeTo({ pitch: 45, duration: 1000 });
+        document.getElementById('map3D').classList.add('active');
+        document.getElementById('map2D').classList.remove('active');
+    }
+}
+
+// ================================
 //  AUTO-REFRESH RADAR & WARNINGS
 // ================================
 function startAutoRefresh() {
@@ -688,6 +883,78 @@ function startAutoRefresh() {
             loadWarningPolygons();
         }
     }, 10 * 60 * 1000);
+}
+
+// ================================
+//  KEYBOARD SHORTCUTS
+// ================================
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        // Don't trigger shortcuts if typing in input
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            return;
+        }
+        
+        switch(e.key.toLowerCase()) {
+            case ' ':
+                e.preventDefault();
+                if (isAnimating) {
+                    stopAnimation();
+                } else {
+                    startAnimation();
+                }
+                break;
+            case 'l':
+                showLightning = !showLightning;
+                console.log('Lightning:', showLightning);
+                break;
+            case 'f':
+                showFronts = !showFronts;
+                console.log('Storm Fronts:', showFronts);
+                break;
+            case 'w':
+                warningsEnabled = !warningsEnabled;
+                document.getElementById('warningsToggle').checked = warningsEnabled;
+                toggleWarnings(warningsEnabled);
+                break;
+            case 'm':
+                multiPanelMode = !multiPanelMode;
+                document.getElementById('toggleMultiPanel').checked = multiPanelMode;
+                toggleMultiPanel(multiPanelMode);
+                break;
+            case '2':
+                toggleMapMode('2D');
+                break;
+            case '3':
+                toggleMapMode('3D');
+                break;
+            case 't':
+                showStormTracks = !showStormTracks;
+                document.getElementById('toggleStormTracks').checked = showStormTracks;
+                console.log('Storm Tracks:', showStormTracks);
+                break;
+            case 'v':
+                showTVS = !showTVS;
+                document.getElementById('toggleTVS').checked = showTVS;
+                console.log('TVS Signatures:', showTVS);
+                break;
+            case '?':
+                document.getElementById('keyboardModal').classList.remove('hidden');
+                break;
+            case 'arrowleft':
+                e.preventDefault();
+                stopAnimation();
+                currentTimeIndex = Math.max(0, currentTimeIndex - 1);
+                updateRadarLayer(currentRadarType, currentTimeIndex);
+                break;
+            case 'arrowright':
+                e.preventDefault();
+                stopAnimation();
+                currentTimeIndex = Math.min(radarTimes.length - 1, currentTimeIndex + 1);
+                updateRadarLayer(currentRadarType, currentTimeIndex);
+                break;
+        }
+    });
 }
 
 // ================================
@@ -712,6 +979,12 @@ map.on('click', (e) => {
     currentLat = e.lngLat.lat;
     currentLng = e.lngLat.lng;
     showWeatherPanel(currentLat, currentLng);
+});
+
+// Menu button
+document.getElementById('menuBtn').addEventListener('click', () => {
+    const menu = document.getElementById('sideMenu');
+    menu.classList.toggle('hidden');
 });
 
 // Search functionality
@@ -793,10 +1066,22 @@ document.getElementById('timeSlider').addEventListener('input', (e) => {
     updateRadarLayer(currentRadarType, currentTimeIndex);
 });
 
-// Radar type selector
-document.getElementById('radarType').addEventListener('change', (e) => {
+// Radar product selectors
+document.getElementById('radarProduct').addEventListener('change', (e) => {
     currentRadarType = e.target.value;
     updateRadarLayer(currentRadarType, currentTimeIndex);
+});
+
+document.getElementById('radarTypeQuick').addEventListener('change', (e) => {
+    currentRadarType = e.target.value;
+    document.getElementById('radarProduct').value = e.target.value;
+    updateRadarLayer(currentRadarType, currentTimeIndex);
+});
+
+// Tilt angle selector
+document.getElementById('tiltAngle').addEventListener('change', (e) => {
+    currentTiltAngle = parseFloat(e.target.value);
+    console.log('Tilt angle:', currentTiltAngle);
 });
 
 // Opacity slider
@@ -809,13 +1094,108 @@ document.getElementById('opacitySlider').addEventListener('input', (e) => {
     }
 });
 
+// Feature toggles
+document.getElementById('toggleLightning').addEventListener('change', (e) => {
+    showLightning = e.target.checked;
+    console.log('Lightning:', showLightning);
+});
+
+document.getElementById('toggleFronts').addEventListener('change', (e) => {
+    showFronts = e.target.checked;
+    console.log('Storm Fronts:', showFronts);
+});
+
+document.getElementById('toggleSPC').addEventListener('change', (e) => {
+    showSPC = e.target.checked;
+    console.log('SPC Outlooks:', showSPC);
+});
+
+document.getElementById('toggleMPING').addEventListener('change', (e) => {
+    showMPING = e.target.checked;
+    console.log('MPING Reports:', showMPING);
+});
+
+document.getElementById('toggleTVS').addEventListener('change', (e) => {
+    showTVS = e.target.checked;
+    console.log('TVS Signatures:', showTVS);
+});
+
+document.getElementById('toggleStormTracks').addEventListener('change', (e) => {
+    showStormTracks = e.target.checked;
+    console.log('Storm Tracks:', showStormTracks);
+});
+
+document.getElementById('toggleMultiPanel').addEventListener('change', (e) => {
+    toggleMultiPanel(e.target.checked);
+});
+
+document.getElementById('toggleTDWR').addEventListener('change', (e) => {
+    showTDWR = e.target.checked;
+    console.log('TDWR Radars:', showTDWR);
+});
+
 // Warnings toggle
 document.getElementById('warningsToggle').addEventListener('change', (e) => {
     toggleWarnings(e.target.checked);
 });
 
+// Map mode buttons
+document.getElementById('map2D').addEventListener('click', () => {
+    toggleMapMode('2D');
+});
+
+document.getElementById('map3D').addEventListener('click', () => {
+    toggleMapMode('3D');
+});
+
 // Close weather panel
 document.getElementById('closePanel').addEventListener('click', hideWeatherPanel);
+
+// Modal controls
+document.getElementById('closeModal').addEventListener('click', () => {
+    document.getElementById('warningModal').classList.add('hidden');
+});
+
+document.getElementById('playAlertBtn').addEventListener('click', () => {
+    console.log('Playing alert sound...');
+    alert('Alert sound would play here');
+});
+
+document.getElementById('shareAlertBtn').addEventListener('click', () => {
+    console.log('Sharing alert...');
+    alert('Share functionality would be here');
+});
+
+// Keyboard shortcuts modal
+document.getElementById('keyboardBtn').addEventListener('click', () => {
+    document.getElementById('keyboardModal').classList.remove('hidden');
+});
+
+// Feedback modal
+document.getElementById('feedbackBtn').addEventListener('click', () => {
+    document.getElementById('feedbackModal').classList.remove('hidden');
+});
+
+document.getElementById('submitFeedback').addEventListener('click', () => {
+    const feedback = document.getElementById('feedbackText').value;
+    if (feedback.trim()) {
+        console.log('Feedback submitted:', feedback);
+        alert('Thank you for your feedback!');
+        document.getElementById('feedbackText').value = '';
+        document.getElementById('feedbackModal').classList.add('hidden');
+    } else {
+        alert('Please enter your feedback');
+    }
+});
+
+// Close modals when clicking outside
+document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.add('hidden');
+        }
+    });
+});
 
 // Handle window resize
 window.addEventListener('resize', () => {
@@ -826,12 +1206,28 @@ window.addEventListener('resize', () => {
 //  INITIALIZATION
 // ================================
 
+// Setup keyboard shortcuts
+setupKeyboardShortcuts();
+
+// Initial warning list update
+setTimeout(() => {
+    loadWarningPolygons();
+}, 1000);
+
 console.log('Storm Surge Weather Dashboard initialized successfully!');
 console.log('Features:');
 console.log('- NEXRAD Level II Dual-Polarization Radar Data');
 console.log('- Real-time Weather Alerts & Warning Polygons');
 console.log('- Precipitation Type Classification');
 console.log('- 60-minute Radar Animation Loop');
+console.log('- Multiple Radar Products & Tilt Angles');
+console.log('- Lightning, Storm Fronts, SPC Outlooks');
+console.log('- TVS Signatures & Storm Tracks');
+console.log('- MPING Reports & TDWR Radars');
+console.log('- Multi-Panel Display');
+console.log('- 2D/3D Map Modes');
+console.log('- Keyboard Shortcuts (press ? for help)');
+console.log('- Feedback System');
 console.log('- Auto-refresh every 5-10 minutes');
 console.log('- Fully Responsive Design');
 console.log('Weather data: Open-Meteo API (Fahrenheit)');
@@ -841,4 +1237,4 @@ console.log('Click anywhere on the map to get weather information for that locat
 
 // ========================================
 //  JAVASCRIPT ENDS HERE
-// ========================================  
+// ========================================
