@@ -1,49 +1,71 @@
 // ========================================
 //  JAVASCRIPT STARTS HERE
 //  File: script.js
-//  Storm Surge Weather Dashboard - Enhanced
+//  Storm Surge Weather Dashboard - Mobile Optimized
 // ========================================
 
 // ================================
 //  API KEYS & CONFIG
 // ================================
 const MAPBOX_KEY = "pk.eyJ1Ijoic3Rvcm0tc3VyZ2UiLCJhIjoiY21pcDM0emdxMDhwYzNmcHc2aTlqeTN5OSJ9.QYtnuhdixR4SGxLQldE9PA";
+const FEEDBACK_EMAIL = "stormsurgee025@gmail.com";
 
-// Current state
-let currentLat = 39.8283;
-let currentLng = -98.5795; // Center of US
-let currentRadarType = 'composite';
+// State management
+let state = {
+    currentLat: 39.8283,
+    currentLng: -98.5795,
+    currentRadarProduct: 'composite-reflectivity',
+    currentTiltAngle: 0.5,
+    isAnimating: true,
+    animationInterval: null,
+    currentTimeIndex: 11,
+    radarTimes: [],
+    animationSpeed: 1000,
+    
+    // Feature toggles
+    showPolygons: true,
+    showLightning: true,
+    showFronts: true,
+    showSPC: true,
+    showTVS: true,
+    showStormTracks: true,
+    showSkywarn: true,
+    showTDWR: false,
+    satelliteMode: false,
+    
+    // UI toggles
+    showWeatherCard: true,
+    showLegend: true,
+    showTimeDisplay: true,
+    
+    // Warnings
+    activeWarnings: [],
+    enabledWarningTypes: new Set([
+        'Tornado Warning',
+        'Severe Thunderstorm Warning',
+        'Flash Flood Warning',
+        'Flood Warning',
+        'Winter Storm Warning',
+        'Winter Weather Advisory',
+        'High Wind Warning',
+        'Gale Warning',
+        'Dense Fog Advisory',
+        'Special Weather Statement',
+        'Heat Advisory',
+        'Excessive Heat Warning'
+    ]),
+    
+    // Skywarn reports
+    skywarnReports: [],
+    
+    // Selected warning for detail view
+    selectedWarning: null,
+    
+    // Polygon click debounce
+    lastPolygonClick: 0
+};
 
-// Animation state
-let isAnimating = true;
-let animationInterval = null;
-let currentTimeIndex = 11; // Start at "now" (latest frame)
-let radarTimes = [];
-let animationSpeed = 1000;
-
-// Warning state
-let warningsEnabled = true;
-let activeWarnings = [];
-let warningLayers = [];
-
-// Cache for radar frames
-let radarFrameCache = {};
-
-// Feature toggles
-let showLightning = true;
-let showFronts = true;
-let showSPC = true;
-let showMPING = false;
-let showTVS = true;
-let showStormTracks = true;
-let showTDWR = false;
-let multiPanelMode = false;
-let mapMode = '3D';
-let currentTiltAngle = 0.5;
-
-// ================================
-//  WEATHER CODE TRANSLATION (Open-Meteo)
-// ================================
+// Weather code translations
 const weatherText = {
     0: "Clear sky",
     1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
@@ -59,27 +81,23 @@ const weatherText = {
     95: "Thunderstorm", 96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail"
 };
 
-// Warning type colors and data
-const warningTypes = {
-    'Tornado Warning': { color: '#FF0000', severity: 'Extreme' },
-    'Severe Thunderstorm Warning': { color: '#FFA500', severity: 'Severe' },
-    'Flood Warning': { color: '#00FF00', severity: 'Moderate' },
-    'Flood Advisory': { color: '#00FF7F', severity: 'Advisory' },
-    'Flash Flood Warning': { color: '#8B0000', severity: 'Severe' },
-    'Winter Storm Warning': { color: '#FF1493', severity: 'Severe' },
-    'Winter Weather Advisory': { color: '#7B68EE', severity: 'Advisory' },
-    'Winter Storm Watch': { color: '#4682B4', severity: 'Watch' },
-    'Blizzard Warning': { color: '#FF4500', severity: 'Extreme' },
-    'Ice Storm Warning': { color: '#8B008B', severity: 'Severe' },
-    'High Wind Warning': { color: '#DAA520', severity: 'Severe' },
-    'Wind Advisory': { color: '#D2B48C', severity: 'Advisory' },
-    'Gale Warning': { color: '#DDA0DD', severity: 'Warning' },
-    'Storm Warning': { color: '#9370DB', severity: 'Warning' },
-    'Hurricane Warning': { color: '#DC143C', severity: 'Extreme' },
-    'Tropical Storm Warning': { color: '#B22222', severity: 'Severe' },
-    'Special Weather Statement': { color: '#FFE4B5', severity: 'Statement' },
-    'Heat Advisory': { color: '#FF7F50', severity: 'Advisory' },
-    'Excessive Heat Warning': { color: '#C71585', severity: 'Severe' }
+// Warning type colors
+const warningColors = {
+    'Tornado Warning': '#FF0000',
+    'Severe Thunderstorm Warning': '#FFA500',
+    'Flash Flood Warning': '#8B0000',
+    'Flood Warning': '#00FF00',
+    'Flood Advisory': '#00FF7F',
+    'Winter Storm Warning': '#FF1493',
+    'Winter Weather Advisory': '#7B68EE',
+    'Winter Storm Watch': '#4682B4',
+    'High Wind Warning': '#DAA520',
+    'Wind Advisory': '#D2B48C',
+    'Gale Warning': '#DDA0DD',
+    'Dense Fog Advisory': '#708090',
+    'Special Weather Statement': '#FFE4B5',
+    'Heat Advisory': '#FF7F50',
+    'Excessive Heat Warning': '#C71585'
 };
 
 // ================================
@@ -89,431 +107,335 @@ mapboxgl.accessToken = MAPBOX_KEY;
 
 const map = new mapboxgl.Map({
     container: 'map',
-    style: "mapbox://styles/mapbox/dark-v11",
-    center: [currentLng, currentLat],
+    style: 'mapbox://styles/mapbox/dark-v11',
+    center: [state.currentLng, state.currentLat],
     zoom: 4,
     minZoom: 2,
-    maxZoom: 12,
-    pitch: mapMode === '3D' ? 45 : 0
+    maxZoom: 12
 });
 
-const RADAR_SOURCE = "nexrad-radar";
-const RADAR_LAYER = "nexrad-radar-layer";
-
 // ================================
-//  PRECIPITATION TYPE CLASSIFICATION
-// ================================
-function classifyPrecipitationType(temp, weatherCode) {
-    // Classify based on temperature and weather code
-    if (weatherCode >= 71 && weatherCode <= 77) {
-        return { type: 'snow', icon: '❄️', color: '#4169E1' };
-    } else if (weatherCode >= 85 && weatherCode <= 86) {
-        return { type: 'snow', icon: '❄️', color: '#4169E1' };
-    } else if (weatherCode === 56 || weatherCode === 57 || weatherCode === 66 || weatherCode === 67) {
-        return { type: 'ice/sleet', icon: '🧊', color: '#E6E6FA' };
-    } else if ((weatherCode >= 61 && weatherCode <= 65) || (weatherCode >= 80 && weatherCode <= 82)) {
-        if (temp <= 32) {
-            return { type: 'freezing rain', icon: '🧊', color: '#B0C4DE' };
-        }
-        return { type: 'rain', icon: '🌧️', color: '#00ff00' };
-    } else if (weatherCode >= 51 && weatherCode <= 55) {
-        return { type: 'drizzle', icon: '💧', color: '#90EE90' };
-    } else if (weatherCode >= 95 && weatherCode <= 99) {
-        return { type: 'thunderstorm', icon: '⛈️', color: '#ff0000' };
-    }
-    
-    return null;
-}
-
-// ================================
-//  RADAR ANIMATION FUNCTIONS
+//  RADAR FUNCTIONS
 // ================================
 function generateRadarTimes() {
     const times = [];
     const now = new Date();
     
-    // Generate 12 time frames: every 5 minutes for 60 minutes
+    // Generate 12 frames: 11 historical + now (5 min intervals, 60 min total)
     for (let i = 11; i >= 0; i--) {
         const time = new Date(now.getTime() - (i * 5 * 60 * 1000));
         times.push(time);
     }
     
-    radarTimes = times;
+    state.radarTimes = times;
     return times;
 }
 
-function updateRadarLayer(radarType, timeIndex = 11) {
-    if (!radarTimes.length) {
-        generateRadarTimes();
-    }
-    
-    // Use RainViewer's NEXRAD data
-    let tileURL;
-    const cacheKey = `${radarType}-${timeIndex}`;
-    
-    if (radarFrameCache[cacheKey]) {
-        tileURL = radarFrameCache[cacheKey];
-    } else {
-        if (timeIndex === 11) {
-            // Current/live radar
-            tileURL = `https://tilecache.rainviewer.com/v2/radar/0/256/{z}/{x}/{y}/6/1_1.png`;
+async function loadNEXRADRadar(timeIndex = 11) {
+    try {
+        showLoading(true);
+        
+        // For now, using RainViewer as proxy for NEXRAD data
+        // TODO: Implement direct AWS NEXRAD Level II data parsing
+        const timestamp = timeIndex === 11 ? 0 : Math.floor(state.radarTimes[timeIndex].getTime() / 1000);
+        const tileURL = `https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/6/1_1.png`;
+        
+        if (map.getSource('nexrad-source')) {
+            map.getSource('nexrad-source').setTiles([tileURL]);
         } else {
-            // Historical radar - use timestamp
-            const timestamp = Math.floor(radarTimes[timeIndex].getTime() / 1000);
-            tileURL = `https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/6/1_1.png`;
+            map.addSource('nexrad-source', {
+                type: 'raster',
+                tiles: [tileURL],
+                tileSize: 256
+            });
+            
+            map.addLayer({
+                id: 'nexrad-layer',
+                type: 'raster',
+                source: 'nexrad-source',
+                paint: {
+                    'raster-opacity': 0.7,
+                    'raster-fade-duration': 300
+                }
+            });
         }
-        radarFrameCache[cacheKey] = tileURL;
+        
+        updateTimeDisplay(timeIndex);
+        updateRadarLegend();
+        showLoading(false);
+        
+    } catch (error) {
+        console.error('Error loading NEXRAD radar:', error);
+        showToast('Error loading radar data', 'error');
+        showLoading(false);
     }
-
-    if (map.getSource(RADAR_SOURCE)) {
-        map.getSource(RADAR_SOURCE).setTiles([tileURL]);
-    } else {
-        map.addSource(RADAR_SOURCE, {
-            type: "raster",
-            tiles: [tileURL],
-            tileSize: 256
-        });
-
-        map.addLayer({
-            id: RADAR_LAYER,
-            type: "raster",
-            source: RADAR_SOURCE,
-            paint: { 
-                "raster-opacity": 0.55,
-                "raster-fade-duration": 300
-            }
-        });
-    }
-
-    updateRadarTimeDisplay(timeIndex);
-    updateLegend(radarType);
-    updateLastUpdateTime();
 }
 
-function updateRadarTimeDisplay(timeIndex) {
-    const timeSlider = document.getElementById('timeSlider');
-    timeSlider.value = timeIndex;
+function updateTimeDisplay(timeIndex) {
+    state.currentTimeIndex = timeIndex;
+    document.getElementById('timeSlider').value = timeIndex;
     
     if (timeIndex === 11) {
-        document.getElementById('radarTime').textContent = 'Now';
-        document.getElementById('radarTimeMode').textContent = 'LIVE';
+        document.getElementById('currentTime').textContent = 'Now';
+        document.getElementById('timeMode').textContent = 'LIVE';
+        document.getElementById('timeMode').style.background = 'rgba(0, 255, 136, 0.2)';
+        document.getElementById('timeMode').style.color = '#00ff88';
     } else {
-        const time = radarTimes[timeIndex];
+        const time = state.radarTimes[timeIndex];
         const timeStr = time.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
+            hour: 'numeric', 
             minute: '2-digit' 
         });
         const minutesAgo = Math.round((Date.now() - time.getTime()) / 60000);
         
-        document.getElementById('radarTime').textContent = timeStr;
-        document.getElementById('radarTimeMode').textContent = `${minutesAgo}m ago`;
+        document.getElementById('currentTime').textContent = timeStr;
+        document.getElementById('timeMode').textContent = `${minutesAgo}m ago`;
+        document.getElementById('timeMode').style.background = 'rgba(255, 170, 0, 0.2)';
+        document.getElementById('timeMode').style.color = '#ffaa00';
     }
 }
 
-function updateLastUpdateTime() {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-    });
-    document.getElementById('lastUpdate').textContent = `Updated: ${timeStr}`;
+function updateRadarLegend() {
+    const legendTitle = document.getElementById('legendTitle');
+    
+    const legends = {
+        'base-reflectivity': 'Base Reflectivity (dBZ)',
+        'composite-reflectivity': 'Composite (dBZ)',
+        'base-velocity': 'Velocity (kts)',
+        'storm-relative-velocity': 'Storm Velocity',
+        'correlation-coefficient': 'Correlation Coef.',
+        'differential-reflectivity': 'Diff. Reflectivity',
+        'specific-differential-phase': 'Specific Diff. Phase',
+        'one-hour-precipitation': '1-Hr Precip (in)',
+        'storm-total-precipitation': 'Storm Total (in)'
+    };
+    
+    legendTitle.textContent = legends[state.currentRadarProduct] || 'Reflectivity (dBZ)';
 }
 
 function startAnimation() {
-    if (animationInterval) clearInterval(animationInterval);
+    if (state.animationInterval) clearInterval(state.animationInterval);
     
-    animationInterval = setInterval(() => {
-        currentTimeIndex = (currentTimeIndex + 1) % radarTimes.length;
-        updateRadarLayer(currentRadarType, currentTimeIndex);
-    }, animationSpeed);
+    state.animationInterval = setInterval(() => {
+        state.currentTimeIndex = (state.currentTimeIndex + 1) % state.radarTimes.length;
+        loadNEXRADRadar(state.currentTimeIndex);
+    }, state.animationSpeed);
     
-    isAnimating = true;
+    state.isAnimating = true;
     document.getElementById('playPauseBtn').textContent = '⏸️';
-    document.getElementById('playPauseBtn').classList.add('playing');
 }
 
 function stopAnimation() {
-    if (animationInterval) {
-        clearInterval(animationInterval);
-        animationInterval = null;
+    if (state.animationInterval) {
+        clearInterval(state.animationInterval);
+        state.animationInterval = null;
     }
     
-    isAnimating = false;
+    state.isAnimating = false;
     document.getElementById('playPauseBtn').textContent = '▶️';
-    document.getElementById('playPauseBtn').classList.remove('playing');
-}
-
-function updateLegend(radarType) {
-    const legendTitle = document.querySelector('.legend-title');
-    const legendScale = document.querySelector('.legend-scale');
-    
-    const legends = {
-        'composite': {
-            title: 'Composite Reflectivity (dBZ)',
-            scale: [
-                { color: '#00ff00', label: 'Light (20-35)' },
-                { color: '#ffff00', label: 'Moderate (35-45)' },
-                { color: '#ff8000', label: 'Heavy (45-55)' },
-                { color: '#ff0000', label: 'Severe (55+)' }
-            ]
-        },
-        'precipitation': {
-            title: 'Precipitation Type',
-            scale: [
-                { color: '#4169E1', label: 'Snow' },
-                { color: '#E6E6FA', label: 'Ice/Sleet' },
-                { color: '#00ff00', label: 'Light Rain' },
-                { color: '#ffff00', label: 'Moderate Rain' },
-                { color: '#ff8000', label: 'Heavy Rain' },
-                { color: '#ff0000', label: 'Severe' }
-            ]
-        },
-        'base': {
-            title: 'Base Reflectivity',
-            scale: [
-                { color: '#00ff00', label: 'Light' },
-                { color: '#ffff00', label: 'Moderate' },
-                { color: '#ff8000', label: 'Heavy' },
-                { color: '#ff0000', label: 'Severe' }
-            ]
-        },
-        'velocity': {
-            title: 'Storm Velocity',
-            scale: [
-                { color: '#00ff00', label: 'Approaching' },
-                { color: '#ffff00', label: 'Moderate' },
-                { color: '#ff8000', label: 'Fast' },
-                { color: '#ff0000', label: 'Very Fast' }
-            ]
-        }
-    };
-
-    const legend = legends[radarType] || legends['composite'];
-    legendTitle.textContent = legend.title;
-    
-    legendScale.innerHTML = legend.scale.map(item => 
-        `<div class="legend-item">
-            <div class="legend-color" style="background: ${item.color};"></div>
-            <span>${item.label}</span>
-        </div>`
-    ).join('');
 }
 
 // ================================
 //  WEATHER ALERTS/WARNINGS
 // ================================
-async function fetchWeatherAlerts(lat, lng) {
+async function loadWeatherAlerts() {
     try {
-        // Using NWS API for weather alerts
-        const response = await fetch(`https://api.weather.gov/alerts/active?point=${lat},${lng}`);
-        const data = await response.json();
-        
-        if (data.features && data.features.length > 0) {
-            return data.features.map(feature => ({
-                id: feature.properties.id,
-                event: feature.properties.event,
-                headline: feature.properties.headline,
-                description: feature.properties.description,
-                severity: feature.properties.severity,
-                urgency: feature.properties.urgency,
-                onset: feature.properties.onset,
-                expires: feature.properties.expires,
-                senderName: feature.properties.senderName,
-                areas: feature.properties.areaDesc,
-                geometry: feature.geometry
-            }));
-        }
-        return [];
-    } catch (error) {
-        console.error('Error fetching weather alerts:', error);
-        return [];
-    }
-}
-
-async function loadWarningPolygons() {
-    try {
-        // Fetch active weather alerts for the US
         const response = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert');
         const data = await response.json();
         
-        activeWarnings = data.features || [];
-        displayWarnings();
-        updateWarningsList();
-        
+        if (data.features) {
+            state.activeWarnings = data.features.filter(feature => {
+                const eventType = feature.properties.event;
+                return state.enabledWarningTypes.has(eventType);
+            });
+            
+            updateWarningsList();
+            displayWarningPolygons();
+            updateAlertBadge();
+        }
     } catch (error) {
-        console.error('Error loading warning polygons:', error);
+        console.error('Error loading weather alerts:', error);
         // Generate sample warnings for demo
         generateSampleWarnings();
     }
 }
 
 function generateSampleWarnings() {
-    // Generate sample warnings for demonstration
-    const sampleWarnings = Object.keys(warningTypes).map((type, idx) => {
-        const warningData = warningTypes[type];
-        return {
-            properties: {
-                id: `sample-${idx}`,
-                event: type,
-                headline: `${type} in effect until further notice`,
-                description: `This is a ${type}. Monitor conditions and take appropriate action.`,
-                severity: warningData.severity,
-                urgency: 'Immediate',
-                onset: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-                expires: new Date(Date.now() + Math.random() * 86400000).toISOString(),
-                senderName: 'NWS',
-                areaDesc: 'Sample County'
-            },
-            geometry: null
-        };
-    });
+    const sampleTypes = [
+        'Tornado Warning',
+        'Severe Thunderstorm Warning',
+        'Flash Flood Warning',
+        'Winter Storm Warning',
+        'High Wind Warning'
+    ];
     
-    activeWarnings = sampleWarnings;
+    state.activeWarnings = sampleTypes.map((type, idx) => ({
+        properties: {
+            id: `sample-${idx}`,
+            event: type,
+            headline: `${type} in effect until further notice`,
+            description: `This is a ${type}. Take appropriate safety precautions.`,
+            severity: 'Severe',
+            urgency: 'Immediate',
+            onset: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+            expires: new Date(Date.now() + Math.random() * 86400000).toISOString(),
+            senderName: 'NWS',
+            areaDesc: 'Sample County, Example Region'
+        },
+        geometry: null
+    }));
+    
     updateWarningsList();
-}
-
-function displayWarnings() {
-    // Remove existing warning layers
-    warningLayers.forEach(layerId => {
-        if (map.getLayer(layerId)) {
-            map.removeLayer(layerId);
-        }
-        if (map.getSource(layerId)) {
-            map.removeSource(layerId);
-        }
-    });
-    warningLayers = [];
-
-    if (!warningsEnabled || activeWarnings.length === 0) {
-        return;
-    }
-
-    // Create GeoJSON for warnings
-    const warningGeoJSON = {
-        type: 'FeatureCollection',
-        features: activeWarnings.filter(warning => warning.geometry).map(warning => ({
-            type: 'Feature',
-            geometry: warning.geometry,
-            properties: {
-                event: warning.properties.event,
-                headline: warning.properties.headline,
-                description: warning.properties.description,
-                severity: warning.properties.severity,
-                urgency: warning.properties.urgency
-            }
-        }))
-    };
-
-    // Add warning polygon source
-    const sourceId = 'weather-warnings';
-    if (!map.getSource(sourceId)) {
-        map.addSource(sourceId, {
-            type: 'geojson',
-            data: warningGeoJSON
-        });
-    }
-
-    // Add fill layer
-    const fillLayerId = 'warning-fills';
-    if (!map.getLayer(fillLayerId)) {
-        map.addLayer({
-            id: fillLayerId,
-            type: 'fill',
-            source: sourceId,
-            paint: {
-                'fill-color': [
-                    'match',
-                    ['get', 'severity'],
-                    'Extreme', '#ff0000',
-                    'Severe', '#ff8000',
-                    'Moderate', '#ffff00',
-                    '#00ff00'
-                ],
-                'fill-opacity': 0.2
-            }
-        });
-        warningLayers.push(fillLayerId);
-    }
-
-    // Add outline layer
-    const lineLayerId = 'warning-lines';
-    if (!map.getLayer(lineLayerId)) {
-        map.addLayer({
-            id: lineLayerId,
-            type: 'line',
-            source: sourceId,
-            paint: {
-                'line-color': [
-                    'match',
-                    ['get', 'severity'],
-                    'Extreme', '#ff0000',
-                    'Severe', '#ff8000',
-                    'Moderate', '#ffff00',
-                    '#00ff00'
-                ],
-                'line-width': 2,
-                'line-opacity': 0.8
-            }
-        });
-        warningLayers.push(lineLayerId);
-    }
-
-    // Add click handler for warnings
-    map.on('click', fillLayerId, (e) => {
-        if (e.features.length > 0) {
-            const feature = e.features[0];
-            const props = feature.properties;
-            
-            new mapboxgl.Popup()
-                .setLngLat(e.lngLat)
-                .setHTML(`
-                    <div class="popup-warning-title">${props.event}</div>
-                    <div class="popup-warning-desc">${props.headline || 'No additional details'}</div>
-                `)
-                .addTo(map);
-        }
-    });
-
-    // Change cursor on hover
-    map.on('mouseenter', fillLayerId, () => {
-        map.getCanvas().style.cursor = 'pointer';
-    });
-
-    map.on('mouseleave', fillLayerId, () => {
-        map.getCanvas().style.cursor = 'crosshair';
-    });
+    updateAlertBadge();
 }
 
 function updateWarningsList() {
-    const warningsList = document.getElementById('warningsList');
-    const warningCount = document.getElementById('warningCount');
+    const content = document.getElementById('warningsContent');
+    const count = document.getElementById('alertCount');
     
-    warningCount.textContent = activeWarnings.length;
+    count.textContent = state.activeWarnings.length;
     
-    if (activeWarnings.length === 0) {
-        warningsList.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">No active warnings</div>';
+    if (state.activeWarnings.length === 0) {
+        content.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">No active warnings</div>';
         return;
     }
     
-    warningsList.innerHTML = activeWarnings.map(warning => {
+    content.innerHTML = state.activeWarnings.map(warning => {
         const props = warning.properties;
-        const typeData = warningTypes[props.event] || { color: '#999', severity: 'Unknown' };
+        const color = warningColors[props.event] || '#999';
+        const expiresIn = formatTimeRemaining(props.expires);
         
         return `
-            <div class="warning-card" onclick="showWarningDetails('${props.id}')">
-                <div class="warning-card-header">
-                    <div class="warning-type" style="background: ${typeData.color};">
-                        ${props.event}
-                    </div>
-                    <button class="warning-info-btn">ℹ️</button>
-                </div>
-                <div class="warning-card-body">
-                    <div>Expires in: ${formatTimeRemaining(props.expires)}</div>
-                    <div>Source: ${props.senderName || 'NWS'}</div>
-                </div>
+            <div class="warning-item" style="border-left-color: ${color};" onclick="showWarningDetail('${props.id}')">
+                <div class="warning-type">${props.event}</div>
+                <div class="warning-expires">Expires in ${expiresIn}</div>
             </div>
         `;
     }).join('');
+}
+
+function displayWarningPolygons() {
+    if (!state.showPolygons) return;
+    
+    // Remove existing layers
+    if (map.getLayer('warning-fills')) map.removeLayer('warning-fills');
+    if (map.getLayer('warning-lines')) map.removeLayer('warning-lines');
+    if (map.getSource('warnings-source')) map.removeSource('warnings-source');
+    
+    const validWarnings = state.activeWarnings.filter(w => w.geometry);
+    
+    if (validWarnings.length === 0) return;
+    
+    const geojson = {
+        type: 'FeatureCollection',
+        features: validWarnings.map(w => ({
+            type: 'Feature',
+            geometry: w.geometry,
+            properties: {
+                id: w.properties.id,
+                event: w.properties.event,
+                severity: w.properties.severity
+            }
+        }))
+    };
+    
+    map.addSource('warnings-source', {
+        type: 'geojson',
+        data: geojson
+    });
+    
+    map.addLayer({
+        id: 'warning-fills',
+        type: 'fill',
+        source: 'warnings-source',
+        paint: {
+            'fill-color': [
+                'match',
+                ['get', 'event'],
+                'Tornado Warning', '#FF0000',
+                'Severe Thunderstorm Warning', '#FFA500',
+                'Flash Flood Warning', '#8B0000',
+                '#00FF00'
+            ],
+            'fill-opacity': 0.25
+        }
+    });
+    
+    map.addLayer({
+        id: 'warning-lines',
+        type: 'line',
+        source: 'warnings-source',
+        paint: {
+            'line-color': [
+                'match',
+                ['get', 'event'],
+                'Tornado Warning', '#FF0000',
+                'Severe Thunderstorm Warning', '#FFA500',
+                'Flash Flood Warning', '#8B0000',
+                '#00FF00'
+            ],
+            'line-width': 2,
+            'line-opacity': 0.8
+        }
+    });
+    
+    // Click handler with debounce
+    map.on('click', 'warning-fills', (e) => {
+        const now = Date.now();
+        if (now - state.lastPolygonClick < 500) return; // 500ms debounce
+        state.lastPolygonClick = now;
+        
+        if (e.features.length > 0) {
+            const warningId = e.features[0].properties.id;
+            showWarningDetail(warningId);
+        }
+    });
+    
+    map.on('mouseenter', 'warning-fills', () => {
+        map.getCanvas().style.cursor = 'pointer';
+    });
+    
+    map.on('mouseleave', 'warning-fills', () => {
+        map.getCanvas().style.cursor = '';
+    });
+}
+
+function showWarningDetail(warningId) {
+    const warning = state.activeWarnings.find(w => w.properties.id === warningId);
+    if (!warning) return;
+    
+    const props = warning.properties;
+    const color = warningColors[props.event] || '#999';
+    
+    state.selectedWarning = warning;
+    
+    const modal = document.getElementById('warningModal');
+    const header = document.getElementById('warningModalHeader');
+    
+    header.style.background = color;
+    header.style.color = '#fff';
+    
+    document.getElementById('warningModalTitle').textContent = props.event;
+    document.getElementById('warningIssued').textContent = new Date(props.onset).toLocaleString();
+    document.getElementById('warningExpires').textContent = new Date(props.expires).toLocaleString();
+    document.getElementById('warningSeverity').textContent = props.severity || 'N/A';
+    document.getElementById('warningSource').textContent = props.senderName || 'NWS';
+    document.getElementById('warningDescription').textContent = props.description || props.headline;
+    document.getElementById('warningAreas').textContent = props.areaDesc || 'Area information not available';
+    
+    modal.classList.remove('hidden');
+}
+
+function updateAlertBadge() {
+    const badge = document.getElementById('alertBadge');
+    const count = state.activeWarnings.length;
+    
+    if (count > 0) {
+        badge.textContent = count;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
 }
 
 function formatTimeRemaining(expiresISO) {
@@ -526,78 +448,140 @@ function formatTimeRemaining(expiresISO) {
     const hours = Math.floor(diff / 3600000);
     const minutes = Math.floor((diff % 3600000) / 60000);
     
-    return `${hours}h ${minutes}m`;
-}
-
-function showWarningDetails(warningId) {
-    const warning = activeWarnings.find(w => w.properties.id === warningId);
-    if (!warning) return;
-    
-    const props = warning.properties;
-    const typeData = warningTypes[props.event] || { color: '#999', severity: 'Unknown' };
-    
-    // Update modal
-    const modal = document.getElementById('warningModal');
-    const modalHeader = document.getElementById('modalHeader');
-    const modalTitle = document.getElementById('modalTitle');
-    
-    modalHeader.style.background = typeData.color;
-    modalTitle.textContent = props.event;
-    modalTitle.style.color = '#000';
-    
-    document.getElementById('modalIssued').textContent = new Date(props.onset).toLocaleString();
-    document.getElementById('modalExpires').textContent = new Date(props.expires).toLocaleString();
-    document.getElementById('modalSource').textContent = props.senderName || 'NWS';
-    
-    // Hazards
-    const hazards = extractHazards(props.description);
-    document.getElementById('modalHazards').innerHTML = hazards.map(h => 
-        `<span class="hazard-tag">${h}</span>`
-    ).join('');
-    
-    // Impacts
-    document.getElementById('modalImpacts').textContent = props.headline || 'Monitor conditions and stay informed.';
-    
-    // Description
-    document.getElementById('modalDescription').textContent = props.description;
-    
-    // Areas
-    const areas = props.areaDesc ? props.areaDesc.split(';') : ['Area information not available'];
-    document.getElementById('modalAreas').innerHTML = areas.map(area => 
-        `<div class="area-item">${area.trim()}</div>`
-    ).join('');
-    
-    modal.classList.remove('hidden');
-}
-
-function extractHazards(description) {
-    const hazardKeywords = ['flooding', 'heavy rain', 'wind', 'hail', 'tornado', 'snow', 'ice', 'lightning'];
-    const found = [];
-    
-    hazardKeywords.forEach(keyword => {
-        if (description && description.toLowerCase().includes(keyword)) {
-            found.push(keyword);
-        }
-    });
-    
-    return found.length > 0 ? found : ['General hazardous conditions'];
-}
-
-function toggleWarnings(enabled) {
-    warningsEnabled = enabled;
-    if (enabled) {
-        displayWarnings();
-    } else {
-        warningLayers.forEach(layerId => {
-            if (map.getLayer(layerId)) {
-                map.setLayoutProperty(layerId, 'visibility', 'none');
-            }
-        });
-    }
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
 }
 
 // ================================
-//  SEARCH FUNCTIONALITY
+//  SKYWARN REPORTS
+// ================================
+function generateSkywarnReports() {
+    // Sample Skywarn reports
+    state.skywarnReports = [
+        {
+            id: 'skywarn-1',
+            type: 'Tornado Sighting',
+            time: new Date(Date.now() - 15 * 60000),
+            location: 'Near Highway 50 and County Road 12',
+            lat: 40.5,
+            lng: -95.5
+        },
+        {
+            id: 'skywarn-2',
+            type: 'Large Hail (2 inches)',
+            time: new Date(Date.now() - 30 * 60000),
+            location: 'Downtown area',
+            lat: 40.3,
+            lng: -95.8
+        },
+        {
+            id: 'skywarn-3',
+            type: 'Damaging Winds',
+            time: new Date(Date.now() - 45 * 60000),
+            location: 'South of city limits',
+            lat: 40.1,
+            lng: -95.6
+        }
+    ];
+    
+    updateSkywarnPanel();
+}
+
+function updateSkywarnPanel() {
+    const content = document.getElementById('skywarnContent');
+    
+    if (state.skywarnReports.length === 0) {
+        content.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">No recent reports</div>';
+        return;
+    }
+    
+    content.innerHTML = state.skywarnReports.map(report => {
+        const timeAgo = Math.round((Date.now() - report.time.getTime()) / 60000);
+        
+        return `
+            <div class="skywarn-report">
+                <span class="skywarn-badge">SKYWARN REPORT</span>
+                <div class="report-type">${report.type}</div>
+                <div class="report-time">${timeAgo}m ago • ${report.location}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// ================================
+//  WEATHER DATA
+// ================================
+async function getWeatherData(lat, lng) {
+    try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,precipitation_probability,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=1`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        return data;
+    } catch (error) {
+        console.error('Error fetching weather data:', error);
+        return null;
+    }
+}
+
+async function updateWeatherCard(lat, lng) {
+    const data = await getWeatherData(lat, lng);
+    
+    if (!data) {
+        showToast('Unable to load weather data', 'error');
+        return;
+    }
+    
+    const current = data.current;
+    const hourly = data.hourly;
+    
+    // Update main temp and condition
+    document.getElementById('cardTemp').textContent = `${Math.round(current.temperature_2m)}°`;
+    document.getElementById('cardCondition').textContent = weatherText[current.weather_code] || 'Unknown';
+    
+    // Update stats
+    document.getElementById('rainChance').textContent = `${hourly.precipitation_probability[0] || 0}%`;
+    document.getElementById('windStat').textContent = `${Math.round(current.wind_speed_10m)} mph`;
+    
+    // Update hourly forecast
+    const hourlyContainer = document.getElementById('hourlyScroll');
+    hourlyContainer.innerHTML = '';
+    
+    for (let i = 0; i < 12; i++) {
+        const time = new Date(hourly.time[i]);
+        const hour = time.getHours();
+        const temp = Math.round(hourly.temperature_2m[i]);
+        const icon = getWeatherIcon(hourly.weather_code[i]);
+        
+        const hourlyItem = document.createElement('div');
+        hourlyItem.className = 'hourly-item';
+        hourlyItem.innerHTML = `
+            <div class="hourly-time">${hour % 12 || 12}${hour >= 12 ? 'PM' : 'AM'}</div>
+            <div class="hourly-icon">${icon}</div>
+            <div class="hourly-temp">${temp}°</div>
+        `;
+        hourlyContainer.appendChild(hourlyItem);
+    }
+    
+    document.getElementById('weatherCard').classList.remove('hidden');
+}
+
+function getWeatherIcon(weatherCode) {
+    const icons = {
+        0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
+        45: '🌫️', 48: '🌫️',
+        51: '🌦️', 53: '🌦️', 55: '🌧️',
+        61: '🌧️', 63: '🌧️', 65: '🌧️',
+        71: '🌨️', 73: '🌨️', 75: '❄️',
+        80: '🌦️', 81: '🌧️', 82: '⛈️',
+        95: '⛈️', 96: '⛈️', 99: '⛈️'
+    };
+    return icons[weatherCode] || '🌤️';
+}
+
+// ================================
+//  LOCATION SEARCH
 // ================================
 async function searchLocation(query) {
     try {
@@ -617,578 +601,476 @@ async function searchLocation(query) {
     }
 }
 
-function showSearchResults(results) {
-    const resultsContainer = document.getElementById('searchResults');
+function displaySearchResults(results) {
+    const container = document.getElementById('searchResults');
     
     if (results.length === 0) {
-        resultsContainer.innerHTML = '<div class="search-result-item">No results found</div>';
-    } else {
-        resultsContainer.innerHTML = results.map(result => 
-            `<div class="search-result-item" data-lat="${result.lat}" data-lng="${result.lng}">
-                ${result.name}
-            </div>`
-        ).join('');
-    }
-    
-    resultsContainer.classList.remove('hidden');
-}
-
-function hideSearchResults() {
-    document.getElementById('searchResults').classList.add('hidden');
-}
-
-// ================================
-//  WEATHER DATA FUNCTIONS (Open-Meteo)
-// ================================
-async function getWeatherData(lat, lng) {
-    try {
-        // Current weather - FORCE Fahrenheit with temperature_unit=fahrenheit
-        const currentUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`;
-        
-        // Hourly forecast - FORCE Fahrenheit
-        const hourlyUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,showers,snowfall,weather_code,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,uv_index&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=2`;
-        
-        // Daily forecast - FORCE Fahrenheit
-        const dailyUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,daylight_duration,sunshine_duration,uv_index_max,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=7`;
-        
-        const [currentRes, hourlyRes, dailyRes] = await Promise.all([
-            fetch(currentUrl),
-            fetch(hourlyUrl),
-            fetch(dailyUrl)
-        ]);
-        
-        const currentData = await currentRes.json();
-        const hourlyData = await hourlyRes.json();
-        const dailyData = await dailyRes.json();
-        
-        return {
-            current: currentData.current,
-            hourly: hourlyData.hourly,
-            daily: dailyData.daily
-        };
-    } catch (error) {
-        console.error('Weather data fetch error:', error);
-        return null;
-    }
-}
-
-async function reverseGeocode(lat, lng) {
-    try {
-        const response = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_KEY}`
-        );
-        const data = await response.json();
-        
-        if (data.features && data.features.length > 0) {
-            return data.features[0].place_name;
-        }
-        return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-    } catch (error) {
-        console.error('Reverse geocoding error:', error);
-        return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-    }
-}
-
-function getWindDirection(degrees) {
-    const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-    return directions[Math.round(degrees / 22.5) % 16];
-}
-
-function calculateDewPoint(tempF, humidity) {
-    // Convert F to C for calculation
-    const tempC = (tempF - 32) * 5/9;
-    
-    // Magnus formula approximation
-    const a = 17.27;
-    const b = 237.7;
-    const alpha = ((a * tempC) / (b + tempC)) + Math.log(humidity / 100);
-    const dewPointC = (b * alpha) / (a - alpha);
-    
-    // Convert back to F
-    return (dewPointC * 9/5) + 32;
-}
-
-async function updateWeatherPanel(lat, lng) {
-    const weatherData = await getWeatherData(lat, lng);
-    
-    if (!weatherData) {
-        document.getElementById('locationName').textContent = 'Error loading weather data';
+        container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">No results found</div>';
         return;
     }
+    
+    container.innerHTML = results.map(result => `
+        <div class="search-result-item" onclick="selectLocation(${result.lat}, ${result.lng}, '${result.name.replace(/'/g, "\\'")}')">
+            ${result.name}
+        </div>
+    `).join('');
+}
 
-    const current = weatherData.current;
+function selectLocation(lat, lng, name) {
+    map.flyTo({
+        center: [lng, lat],
+        zoom: 10,
+        duration: 1500
+    });
     
-    // Update location info
-    const locationName = await reverseGeocode(lat, lng);
-    document.getElementById('locationName').textContent = 'Storm Surge Weather';
-    document.getElementById('locationAddress').textContent = locationName;
-    document.getElementById('locationCoords').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    state.currentLat = lat;
+    state.currentLng = lng;
     
-    // Fetch and display weather alerts
-    const alerts = await fetchWeatherAlerts(lat, lng);
-    const warningsSection = document.getElementById('warningsSection');
-    const localWarningsList = document.getElementById('localWarningsList');
-    
-    if (alerts.length > 0) {
-        warningsSection.classList.remove('hidden');
-        localWarningsList.innerHTML = alerts.map(alert => {
-            const typeData = warningTypes[alert.event] || { color: '#999' };
-            return `
-                <div class="warning-card" onclick="showWarningDetails('${alert.id}')">
-                    <div class="warning-type" style="background: ${typeData.color};">${alert.event}</div>
-                </div>
-            `;
-        }).join('');
-    } else {
-        warningsSection.classList.add('hidden');
-    }
-    
-    // Update current weather - temperatures are already in Fahrenheit
-    document.getElementById('currentTemp').textContent = `${Math.round(current.temperature_2m)}°F`;
-    document.getElementById('feelsLike').textContent = `Feels like ${Math.round(current.apparent_temperature)}°F`;
-    document.getElementById('conditions').textContent = weatherText[current.weather_code] || 'Unknown';
-    
-    // Display precipitation type
-    const precipType = classifyPrecipitationType(current.temperature_2m, current.weather_code);
-    const precipTypeElement = document.getElementById('precipType');
-    if (precipType) {
-        precipTypeElement.textContent = `${precipType.icon} ${precipType.type}`;
-        precipTypeElement.style.color = precipType.color;
-    } else {
-        precipTypeElement.textContent = '';
-    }
-    
-    // Calculate dew point
-    const dewPoint = calculateDewPoint(current.temperature_2m, current.relative_humidity_2m);
-    
-    // Update details
-    document.getElementById('humidity').textContent = `${current.relative_humidity_2m}%`;
-    document.getElementById('windSpeed').textContent = `${Math.round(current.wind_speed_10m)} mph`;
-    document.getElementById('windDirection').textContent = getWindDirection(current.wind_direction_10m);
-    document.getElementById('pressure').textContent = `${Math.round(current.pressure_msl)} mb`;
-    document.getElementById('visibility').textContent = `10+ mi`;
-    document.getElementById('uvIndex').textContent = '--';
-    document.getElementById('dewPoint').textContent = `${Math.round(dewPoint)}°F`;
-    document.getElementById('cloudCover').textContent = `${current.cloud_cover}%`;
-    
-    // Update hourly forecast (next 24 hours)
-    const hourlyContainer = document.getElementById('hourlyData');
-    hourlyContainer.innerHTML = '';
-    
-    for (let i = 0; i < 24; i++) {
-        const hourIndex = i;
-        if (weatherData.hourly.time[hourIndex]) {
-            const time = new Date(weatherData.hourly.time[hourIndex]);
-            const timeStr = time.getHours().toString().padStart(2, '0') + ':00';
-            
-            const hourlyItem = document.createElement('div');
-            hourlyItem.className = 'hourly-item';
-            hourlyItem.innerHTML = `
-                <div class="hourly-time">${timeStr}</div>
-                <div class="hourly-temp">${Math.round(weatherData.hourly.temperature_2m[hourIndex])}°F</div>
-                <div class="hourly-condition">${(weatherText[weatherData.hourly.weather_code[hourIndex]] || 'N/A').substring(0, 8)}</div>
-            `;
-            hourlyContainer.appendChild(hourlyItem);
-        }
-    }
+    document.getElementById('currentLocation').textContent = name.split(',')[0];
+    updateWeatherCard(lat, lng);
+    closeSearch();
+}
 
-    // Update daily forecast
-    const dailyContainer = document.getElementById('dailyData');
-    dailyContainer.innerHTML = '';
+// ================================
+//  WEATHER RADIO (NWS)
+// ================================
+async function playWeatherRadio() {
+    if (!state.selectedWarning) return;
     
-    for (let i = 0; i < 7; i++) {
-        if (weatherData.daily.time[i]) {
-            const date = new Date(weatherData.daily.time[i]);
-            const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-            
-            const dailyItem = document.createElement('div');
-            dailyItem.className = 'daily-item';
-            dailyItem.innerHTML = `
-                <div class="daily-date">${dateStr}</div>
-                <div class="daily-temps">${Math.round(weatherData.daily.temperature_2m_max[i])}°F / ${Math.round(weatherData.daily.temperature_2m_min[i])}°F</div>
-            `;
-            dailyContainer.appendChild(dailyItem);
-        }
+    try {
+        // Find nearest NWS weather radio station
+        // This is a simplified implementation
+        // Real implementation would use NWS API to find nearest station
+        
+        showToast('Connecting to Weather Radio...', 'info');
+        
+        // Sample NWS weather radio streams (would need to be dynamically selected)
+        const weatherRadioStations = [
+            'https://nws-stream1.example.com/stream', // Placeholder URLs
+            'https://nws-stream2.example.com/stream'
+        ];
+        
+        // In a real implementation, you would:
+        // 1. Get user's location from the warning
+        // 2. Query NWS for nearest weather radio station
+        // 3. Stream audio from that station
+        
+        showToast('Weather Radio feature coming soon', 'info');
+        
+        // TODO: Implement actual audio streaming
+        // const audio = new Audio(stationURL);
+        // audio.play();
+        
+    } catch (error) {
+        console.error('Error playing weather radio:', error);
+        showToast('Unable to connect to Weather Radio', 'error');
     }
 }
 
-function showClickMarker(lat, lng) {
-    const marker = document.getElementById('clickMarker');
-    const point = map.project([lng, lat]);
+// ================================
+//  SETTINGS MANAGEMENT
+// ================================
+function loadSettings() {
+    // Load saved settings from localStorage
+    const saved = localStorage.getItem('stormSurgeSettings');
+    if (saved) {
+        const settings = JSON.parse(saved);
+        Object.assign(state, settings);
+        applySettings();
+    }
+}
+
+function saveSettings() {
+    const settings = {
+        currentRadarProduct: state.currentRadarProduct,
+        currentTiltAngle: state.currentTiltAngle,
+        showPolygons: state.showPolygons,
+        showLightning: state.showLightning,
+        showFronts: state.showFronts,
+        showSPC: state.showSPC,
+        showTVS: state.showTVS,
+        showStormTracks: state.showStormTracks,
+        showSkywarn: state.showSkywarn,
+        showTDWR: state.showTDWR,
+        satelliteMode: state.satelliteMode,
+        showWeatherCard: state.showWeatherCard,
+        showLegend: state.showLegend,
+        showTimeDisplay: state.showTimeDisplay,
+        enabledWarningTypes: Array.from(state.enabledWarningTypes)
+    };
     
-    marker.style.left = `${point.x}px`;
-    marker.style.top = `${point.y}px`;
-    marker.classList.remove('hidden');
+    localStorage.setItem('stormSurgeSettings', JSON.stringify(settings));
+    showToast('Settings saved', 'success');
+}
+
+function applySettings() {
+    // Apply radar product
+    document.getElementById('radarProductSelect').value = state.currentRadarProduct;
+    document.getElementById('tiltAngleSelect').value = state.currentTiltAngle;
+    
+    // Apply toggles
+    document.getElementById('satelliteToggle').checked = state.satelliteMode;
+    document.getElementById('polygonsToggle').checked = state.showPolygons;
+    document.getElementById('lightningToggle').checked = state.showLightning;
+    document.getElementById('frontsToggle').checked = state.showFronts;
+    document.getElementById('spcToggle').checked = state.showSPC;
+    document.getElementById('tvsToggle').checked = state.showTVS;
+    document.getElementById('tracksToggle').checked = state.showStormTracks;
+    document.getElementById('skywarnToggle').checked = state.showSkywarn;
+    document.getElementById('tdwrToggle').checked = state.showTDWR;
+    
+    document.getElementById('weatherCardToggle').checked = state.showWeatherCard;
+    document.getElementById('legendToggle').checked = state.showLegend;
+    document.getElementById('timeDisplayToggle').checked = state.showTimeDisplay;
+    
+    // Apply UI visibility
+    toggleUI();
+    
+    // Apply map style
+    if (state.satelliteMode) {
+        map.setStyle('mapbox://styles/mapbox/satellite-streets-v12');
+    } else {
+        map.setStyle('mapbox://styles/mapbox/dark-v11');
+    }
+}
+
+function toggleUI() {
+    const weatherCard = document.getElementById('weatherCard');
+    const legend = document.querySelector('.radar-legend');
+    const timeDisplay = document.querySelector('.time-display');
+    
+    if (!state.showWeatherCard && !weatherCard.classList.contains('hidden')) {
+        weatherCard.classList.add('hidden');
+    }
+    
+    if (state.showLegend) {
+        legend.style.display = 'block';
+    } else {
+        legend.style.display = 'none';
+    }
+    
+    if (state.showTimeDisplay) {
+        timeDisplay.style.display = 'flex';
+    } else {
+        timeDisplay.style.display = 'none';
+    }
+}
+
+// ================================
+//  FEEDBACK SYSTEM
+// ================================
+async function sendFeedback(message) {
+    try {
+        // Create mailto link
+        const subject = encodeURIComponent('Storm Surge Weather Feedback');
+        const body = encodeURIComponent(`Feedback from Storm Surge Weather App:\n\n${message}\n\n---\nUser Agent: ${navigator.userAgent}\nTimestamp: ${new Date().toISOString()}`);
+        
+        const mailtoLink = `mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${body}`;
+        
+        // Open email client
+        window.location.href = mailtoLink;
+        
+        showToast('Opening email client...', 'success');
+        document.getElementById('feedbackText').value = '';
+        closeFeedback();
+        
+    } catch (error) {
+        console.error('Error sending feedback:', error);
+        showToast('Error sending feedback', 'error');
+    }
+}
+
+// ================================
+//  UI HELPERS
+// ================================
+function showLoading(show) {
+    const loader = document.getElementById('loadingIndicator');
+    if (show) {
+        loader.classList.remove('hidden');
+    } else {
+        loader.classList.add('hidden');
+    }
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
     
     setTimeout(() => {
-        marker.classList.add('hidden');
-    }, 2000);
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 
-function showWeatherPanel(lat, lng) {
-    const panel = document.getElementById('weatherPanel');
-    panel.classList.remove('hidden');
-    updateWeatherPanel(lat, lng);
-    showClickMarker(lat, lng);
+function closeSettings() {
+    document.getElementById('settingsModal').classList.add('hidden');
+    saveSettings();
 }
 
-function hideWeatherPanel() {
-    const panel = document.getElementById('weatherPanel');
-    panel.classList.add('hidden');
+function closeSearch() {
+    document.getElementById('searchModal').classList.add('hidden');
 }
 
-// ================================
-//  MULTI-PANEL FUNCTIONS
-// ================================
-function toggleMultiPanel(enabled) {
-    multiPanelMode = enabled;
-    const multiPanelContainer = document.getElementById('multiPanelContainer');
-    
-    if (enabled) {
-        multiPanelContainer.classList.remove('hidden');
-    } else {
-        multiPanelContainer.classList.add('hidden');
-    }
+function closeFeedback() {
+    document.getElementById('feedbackModal').classList.add('hidden');
 }
 
-function toggleMapMode(mode) {
-    mapMode = mode;
-    
-    if (mode === '2D') {
-        map.easeTo({ pitch: 0, duration: 1000 });
-        document.getElementById('map2D').classList.add('active');
-        document.getElementById('map3D').classList.remove('active');
-    } else {
-        map.easeTo({ pitch: 45, duration: 1000 });
-        document.getElementById('map3D').classList.add('active');
-        document.getElementById('map2D').classList.remove('active');
-    }
-}
-
-// ================================
-//  AUTO-REFRESH RADAR & WARNINGS
-// ================================
-function startAutoRefresh() {
-    // Refresh radar every 5 minutes
-    setInterval(() => {
-        if (currentTimeIndex === 11) { // Only refresh if on "now" frame
-            generateRadarTimes();
-            updateRadarLayer(currentRadarType, currentTimeIndex);
-        }
-    }, 5 * 60 * 1000);
-    
-    // Refresh warnings every 10 minutes
-    setInterval(() => {
-        if (warningsEnabled) {
-            loadWarningPolygons();
-        }
-    }, 10 * 60 * 1000);
-}
-
-// ================================
-//  KEYBOARD SHORTCUTS
-// ================================
-function setupKeyboardShortcuts() {
-    document.addEventListener('keydown', (e) => {
-        // Don't trigger shortcuts if typing in input
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-            return;
-        }
-        
-        switch(e.key.toLowerCase()) {
-            case ' ':
-                e.preventDefault();
-                if (isAnimating) {
-                    stopAnimation();
-                } else {
-                    startAnimation();
-                }
-                break;
-            case 'l':
-                showLightning = !showLightning;
-                console.log('Lightning:', showLightning);
-                break;
-            case 'f':
-                showFronts = !showFronts;
-                console.log('Storm Fronts:', showFronts);
-                break;
-            case 'w':
-                warningsEnabled = !warningsEnabled;
-                document.getElementById('warningsToggle').checked = warningsEnabled;
-                toggleWarnings(warningsEnabled);
-                break;
-            case 'm':
-                multiPanelMode = !multiPanelMode;
-                document.getElementById('toggleMultiPanel').checked = multiPanelMode;
-                toggleMultiPanel(multiPanelMode);
-                break;
-            case '2':
-                toggleMapMode('2D');
-                break;
-            case '3':
-                toggleMapMode('3D');
-                break;
-            case 't':
-                showStormTracks = !showStormTracks;
-                document.getElementById('toggleStormTracks').checked = showStormTracks;
-                console.log('Storm Tracks:', showStormTracks);
-                break;
-            case 'v':
-                showTVS = !showTVS;
-                document.getElementById('toggleTVS').checked = showTVS;
-                console.log('TVS Signatures:', showTVS);
-                break;
-            case '?':
-                document.getElementById('keyboardModal').classList.remove('hidden');
-                break;
-            case 'arrowleft':
-                e.preventDefault();
-                stopAnimation();
-                currentTimeIndex = Math.max(0, currentTimeIndex - 1);
-                updateRadarLayer(currentRadarType, currentTimeIndex);
-                break;
-            case 'arrowright':
-                e.preventDefault();
-                stopAnimation();
-                currentTimeIndex = Math.min(radarTimes.length - 1, currentTimeIndex + 1);
-                updateRadarLayer(currentRadarType, currentTimeIndex);
-                break;
-        }
-    });
+function closeWarningModal() {
+    document.getElementById('warningModal').classList.add('hidden');
 }
 
 // ================================
 //  EVENT LISTENERS
 // ================================
 
-// Map initialization
+// Map events
 map.on('load', () => {
     generateRadarTimes();
-    updateRadarLayer(currentRadarType, currentTimeIndex);
-    loadWarningPolygons();
+    loadNEXRADRadar(state.currentTimeIndex);
+    loadWeatherAlerts();
+    generateSkywarnReports();
     startAnimation();
-    startAutoRefresh();
     
-    // Update status
-    document.getElementById('radarStatus').textContent = '🟢 Live';
-    updateLastUpdateTime();
-});
-
-// Map click handler
-map.on('click', (e) => {
-    currentLat = e.lngLat.lat;
-    currentLng = e.lngLat.lng;
-    showWeatherPanel(currentLat, currentLng);
-});
-
-// Menu button
-document.getElementById('menuBtn').addEventListener('click', () => {
-    const menu = document.getElementById('sideMenu');
-    menu.classList.toggle('hidden');
-});
-
-// Search functionality
-document.getElementById('searchBtn').addEventListener('click', async () => {
-    const query = document.getElementById('searchInput').value.trim();
-    if (query) {
-        const results = await searchLocation(query);
-        showSearchResults(results);
-    }
-});
-
-document.getElementById('searchInput').addEventListener('keypress', async (e) => {
-    if (e.key === 'Enter') {
-        const query = e.target.value.trim();
-        if (query) {
-            const results = await searchLocation(query);
-            showSearchResults(results);
+    // Auto-refresh every 5 minutes
+    setInterval(() => {
+        if (state.currentTimeIndex === 11) {
+            generateRadarTimes();
+            loadNEXRADRadar(state.currentTimeIndex);
         }
-    }
+    }, 5 * 60 * 1000);
+    
+    // Refresh warnings every 10 minutes
+    setInterval(() => {
+        loadWeatherAlerts();
+    }, 10 * 60 * 1000);
 });
 
-// Search results click handler
-document.getElementById('searchResults').addEventListener('click', (e) => {
-    if (e.target.classList.contains('search-result-item')) {
-        const lat = parseFloat(e.target.dataset.lat);
-        const lng = parseFloat(e.target.dataset.lng);
-        
-        map.flyTo({
-            center: [lng, lat],
-            zoom: 10,
-            duration: 1500
-        });
-        
-        showWeatherPanel(lat, lng);
-        hideSearchResults();
-        document.getElementById('searchInput').value = '';
-    }
+map.on('click', (e) => {
+    state.currentLat = e.lngLat.lat;
+    state.currentLng = e.lngLat.lng;
+    updateWeatherCard(state.currentLat, state.currentLng);
 });
 
-// Hide search results when clicking elsewhere
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.search-container')) {
-        hideSearchResults();
-    }
+// Top bar buttons
+document.getElementById('settingsBtn').addEventListener('click', () => {
+    document.getElementById('settingsModal').classList.remove('hidden');
 });
 
-// Animation controls
+document.getElementById('searchBtn').addEventListener('click', () => {
+    document.getElementById('searchModal').classList.remove('hidden');
+    document.getElementById('searchInput').focus();
+});
+
+// Playback controls
 document.getElementById('playPauseBtn').addEventListener('click', () => {
-    if (isAnimating) {
+    if (state.isAnimating) {
         stopAnimation();
     } else {
-        startAnimation();
-    }
-});
-
-document.getElementById('prevBtn').addEventListener('click', () => {
-    stopAnimation();
-    currentTimeIndex = Math.max(0, currentTimeIndex - 1);
-    updateRadarLayer(currentRadarType, currentTimeIndex);
-});
-
-document.getElementById('nextBtn').addEventListener('click', () => {
-    stopAnimation();
-    currentTimeIndex = Math.min(radarTimes.length - 1, currentTimeIndex + 1);
-    updateRadarLayer(currentRadarType, currentTimeIndex);
-});
-
-document.getElementById('animationSpeed').addEventListener('change', (e) => {
-    animationSpeed = parseInt(e.target.value);
-    if (isAnimating) {
-        stopAnimation();
         startAnimation();
     }
 });
 
 document.getElementById('timeSlider').addEventListener('input', (e) => {
     stopAnimation();
-    currentTimeIndex = parseInt(e.target.value);
-    updateRadarLayer(currentRadarType, currentTimeIndex);
+    const timeIndex = parseInt(e.target.value);
+    loadNEXRADRadar(timeIndex);
 });
 
-// Radar product selectors
-document.getElementById('radarProduct').addEventListener('change', (e) => {
-    currentRadarType = e.target.value;
-    updateRadarLayer(currentRadarType, currentTimeIndex);
+document.getElementById('alertsBtn').addEventListener('click', () => {
+    const panel = document.getElementById('warningsList');
+    panel.classList.toggle('hidden');
 });
 
-document.getElementById('radarTypeQuick').addEventListener('change', (e) => {
-    currentRadarType = e.target.value;
-    document.getElementById('radarProduct').value = e.target.value;
-    updateRadarLayer(currentRadarType, currentTimeIndex);
+// Weather card close
+document.getElementById('closeWeatherCard').addEventListener('click', () => {
+    document.getElementById('weatherCard').classList.add('hidden');
 });
 
-// Tilt angle selector
-document.getElementById('tiltAngle').addEventListener('change', (e) => {
-    currentTiltAngle = parseFloat(e.target.value);
-    console.log('Tilt angle:', currentTiltAngle);
+// Warnings panel close
+document.getElementById('closeWarnings').addEventListener('click', () => {
+    document.getElementById('warningsList').classList.add('hidden');
 });
 
-// Opacity slider
-document.getElementById('opacitySlider').addEventListener('input', (e) => {
+// Search functionality
+document.getElementById('searchInput').addEventListener('keyup', async (e) => {
+    if (e.key === 'Enter') {
+        const query = e.target.value.trim();
+        if (query) {
+            const results = await searchLocation(query);
+            displaySearchResults(results);
+        }
+    }
+});
+
+// Settings - Radar product
+document.getElementById('radarProductSelect').addEventListener('change', (e) => {
+    state.currentRadarProduct = e.target.value;
+    loadNEXRADRadar(state.currentTimeIndex);
+    updateRadarLegend();
+});
+
+// Settings - Tilt angle
+document.getElementById('tiltAngleSelect').addEventListener('change', (e) => {
+    state.currentTiltAngle = parseFloat(e.target.value);
+    console.log('Tilt angle changed to:', state.currentTiltAngle);
+    // TODO: Implement tilt angle change in NEXRAD data loading
+});
+
+// Settings - Radar opacity
+document.getElementById('radarOpacity').addEventListener('input', (e) => {
     const opacity = e.target.value / 100;
-    document.getElementById('opacityValue').textContent = `${e.target.value}%`;
+    document.getElementById('opacityDisplay').textContent = `${e.target.value}%`;
     
-    if (map.getLayer(RADAR_LAYER)) {
-        map.setPaintProperty(RADAR_LAYER, 'raster-opacity', opacity);
+    if (map.getLayer('nexrad-layer')) {
+        map.setPaintProperty('nexrad-layer', 'raster-opacity', opacity);
     }
 });
 
-// Feature toggles
-document.getElementById('toggleLightning').addEventListener('change', (e) => {
-    showLightning = e.target.checked;
-    console.log('Lightning:', showLightning);
-});
-
-document.getElementById('toggleFronts').addEventListener('change', (e) => {
-    showFronts = e.target.checked;
-    console.log('Storm Fronts:', showFronts);
-});
-
-document.getElementById('toggleSPC').addEventListener('change', (e) => {
-    showSPC = e.target.checked;
-    console.log('SPC Outlooks:', showSPC);
-});
-
-document.getElementById('toggleMPING').addEventListener('change', (e) => {
-    showMPING = e.target.checked;
-    console.log('MPING Reports:', showMPING);
-});
-
-document.getElementById('toggleTVS').addEventListener('change', (e) => {
-    showTVS = e.target.checked;
-    console.log('TVS Signatures:', showTVS);
-});
-
-document.getElementById('toggleStormTracks').addEventListener('change', (e) => {
-    showStormTracks = e.target.checked;
-    console.log('Storm Tracks:', showStormTracks);
-});
-
-document.getElementById('toggleMultiPanel').addEventListener('change', (e) => {
-    toggleMultiPanel(e.target.checked);
-});
-
-document.getElementById('toggleTDWR').addEventListener('change', (e) => {
-    showTDWR = e.target.checked;
-    console.log('TDWR Radars:', showTDWR);
-});
-
-// Warnings toggle
-document.getElementById('warningsToggle').addEventListener('change', (e) => {
-    toggleWarnings(e.target.checked);
-});
-
-// Map mode buttons
-document.getElementById('map2D').addEventListener('click', () => {
-    toggleMapMode('2D');
-});
-
-document.getElementById('map3D').addEventListener('click', () => {
-    toggleMapMode('3D');
-});
-
-// Close weather panel
-document.getElementById('closePanel').addEventListener('click', hideWeatherPanel);
-
-// Modal controls
-document.getElementById('closeModal').addEventListener('click', () => {
-    document.getElementById('warningModal').classList.add('hidden');
-});
-
-document.getElementById('playAlertBtn').addEventListener('click', () => {
-    console.log('Playing alert sound...');
-    alert('Alert sound would play here');
-});
-
-document.getElementById('shareAlertBtn').addEventListener('click', () => {
-    console.log('Sharing alert...');
-    alert('Share functionality would be here');
-});
-
-// Keyboard shortcuts modal
-document.getElementById('keyboardBtn').addEventListener('click', () => {
-    document.getElementById('keyboardModal').classList.remove('hidden');
-});
-
-// Feedback modal
-document.getElementById('feedbackBtn').addEventListener('click', () => {
-    document.getElementById('feedbackModal').classList.remove('hidden');
-});
-
-document.getElementById('submitFeedback').addEventListener('click', () => {
-    const feedback = document.getElementById('feedbackText').value;
-    if (feedback.trim()) {
-        console.log('Feedback submitted:', feedback);
-        alert('Thank you for your feedback!');
-        document.getElementById('feedbackText').value = '';
-        document.getElementById('feedbackModal').classList.add('hidden');
+// Settings - Satellite toggle
+document.getElementById('satelliteToggle').addEventListener('change', (e) => {
+    state.satelliteMode = e.target.checked;
+    
+    if (state.satelliteMode) {
+        map.setStyle('mapbox://styles/mapbox/satellite-streets-v12');
     } else {
-        alert('Please enter your feedback');
+        map.setStyle('mapbox://styles/mapbox/dark-v11');
+    }
+    
+    // Reload radar after style change
+    map.once('styledata', () => {
+        loadNEXRADRadar(state.currentTimeIndex);
+        if (state.showPolygons) {
+            displayWarningPolygons();
+        }
+    });
+});
+
+// Settings - Polygons toggle
+document.getElementById('polygonsToggle').addEventListener('change', (e) => {
+    state.showPolygons = e.target.checked;
+    
+    if (state.showPolygons) {
+        displayWarningPolygons();
+    } else {
+        if (map.getLayer('warning-fills')) map.removeLayer('warning-fills');
+        if (map.getLayer('warning-lines')) map.removeLayer('warning-lines');
+        if (map.getSource('warnings-source')) map.removeSource('warnings-source');
     }
 });
 
-// Close modals when clicking outside
+// Settings - Feature toggles
+document.getElementById('lightningToggle').addEventListener('change', (e) => {
+    state.showLightning = e.target.checked;
+    console.log('Lightning:', state.showLightning);
+});
+
+document.getElementById('frontsToggle').addEventListener('change', (e) => {
+    state.showFronts = e.target.checked;
+    console.log('Fronts:', state.showFronts);
+});
+
+document.getElementById('spcToggle').addEventListener('change', (e) => {
+    state.showSPC = e.target.checked;
+    console.log('SPC Outlooks:', state.showSPC);
+});
+
+document.getElementById('tvsToggle').addEventListener('change', (e) => {
+    state.showTVS = e.target.checked;
+    console.log('TVS Signatures:', state.showTVS);
+});
+
+document.getElementById('tracksToggle').addEventListener('change', (e) => {
+    state.showStormTracks = e.target.checked;
+    console.log('Storm Tracks:', state.showStormTracks);
+});
+
+document.getElementById('skywarnToggle').addEventListener('change', (e) => {
+    state.showSkywarn = e.target.checked;
+    
+    if (state.showSkywarn) {
+        document.getElementById('skywarnPanel').classList.remove('hidden');
+    } else {
+        document.getElementById('skywarnPanel').classList.add('hidden');
+    }
+});
+
+document.getElementById('tdwrToggle').addEventListener('change', (e) => {
+    state.showTDWR = e.target.checked;
+    console.log('TDWR Radars:', state.showTDWR);
+});
+
+// Settings - UI toggles
+document.getElementById('weatherCardToggle').addEventListener('change', (e) => {
+    state.showWeatherCard = e.target.checked;
+    toggleUI();
+});
+
+document.getElementById('legendToggle').addEventListener('change', (e) => {
+    state.showLegend = e.target.checked;
+    toggleUI();
+});
+
+document.getElementById('timeDisplayToggle').addEventListener('change', (e) => {
+    state.showTimeDisplay = e.target.checked;
+    toggleUI();
+});
+
+// Settings - Warning type checkboxes
+document.querySelectorAll('[data-warning-type]').forEach(checkbox => {
+    checkbox.addEventListener('change', (e) => {
+        const warningType = e.target.dataset.warningType;
+        
+        if (e.target.checked) {
+            state.enabledWarningTypes.add(warningType);
+        } else {
+            state.enabledWarningTypes.delete(warningType);
+        }
+        
+        loadWeatherAlerts();
+    });
+});
+
+// Warning detail modal
+document.getElementById('playWeatherRadioBtn').addEventListener('click', () => {
+    playWeatherRadio();
+});
+
+document.getElementById('shareWarningBtn').addEventListener('click', () => {
+    if (state.selectedWarning) {
+        const props = state.selectedWarning.properties;
+        const text = `${props.event}: ${props.headline}`;
+        
+        if (navigator.share) {
+            navigator.share({
+                title: 'Weather Alert',
+                text: text,
+                url: window.location.href
+            }).catch(err => console.log('Error sharing:', err));
+        } else {
+            // Fallback: copy to clipboard
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Alert copied to clipboard', 'success');
+            });
+        }
+    }
+});
+
+// Feedback
+document.getElementById('submitFeedbackBtn').addEventListener('click', () => {
+    const feedback = document.getElementById('feedbackText').value.trim();
+    
+    if (feedback) {
+        sendFeedback(feedback);
+    } else {
+        showToast('Please enter your feedback', 'error');
+    }
+});
+
+// Close modals on background click
 document.querySelectorAll('.modal').forEach(modal => {
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -1197,43 +1079,121 @@ document.querySelectorAll('.modal').forEach(modal => {
     });
 });
 
-// Handle window resize
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Don't trigger if typing in input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+    }
+    
+    switch(e.key.toLowerCase()) {
+        case ' ':
+            e.preventDefault();
+            if (state.isAnimating) {
+                stopAnimation();
+            } else {
+                startAnimation();
+            }
+            break;
+        case 'arrowleft':
+            e.preventDefault();
+            stopAnimation();
+            state.currentTimeIndex = Math.max(0, state.currentTimeIndex - 1);
+            loadNEXRADRadar(state.currentTimeIndex);
+            break;
+        case 'arrowright':
+            e.preventDefault();
+            stopAnimation();
+            state.currentTimeIndex = Math.min(state.radarTimes.length - 1, state.currentTimeIndex + 1);
+            loadNEXRADRadar(state.currentTimeIndex);
+            break;
+        case 'w':
+            document.getElementById('warningsList').classList.toggle('hidden');
+            break;
+        case 's':
+            document.getElementById('settingsModal').classList.remove('hidden');
+            break;
+        case 'escape':
+            document.querySelectorAll('.modal:not(.hidden)').forEach(modal => {
+                modal.classList.add('hidden');
+            });
+            break;
+    }
+});
+
+// Window resize handler
 window.addEventListener('resize', () => {
     map.resize();
 });
 
+// Prevent pull-to-refresh on mobile
+let touchStartY = 0;
+document.addEventListener('touchstart', (e) => {
+    touchStartY = e.touches[0].clientY;
+}, { passive: true });
+
+document.addEventListener('touchmove', (e) => {
+    const touchY = e.touches[0].clientY;
+    const touchDiff = touchY - touchStartY;
+    
+    if (touchDiff > 0 && window.scrollY === 0) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
+// ================================
+//  GLOBAL FUNCTIONS (for onclick handlers)
+// ================================
+window.showWarningDetail = showWarningDetail;
+window.selectLocation = selectLocation;
+window.closeSettings = closeSettings;
+window.closeSearch = closeSearch;
+window.closeFeedback = closeFeedback;
+window.closeWarningModal = closeWarningModal;
+
 // ================================
 //  INITIALIZATION
 // ================================
+function init() {
+    console.log('Storm Surge Weather Dashboard initializing...');
+    
+    // Load saved settings
+    loadSettings();
+    
+    // Initial weather update for default location
+    updateWeatherCard(state.currentLat, state.currentLng);
+    
+    // Update location display
+    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${state.currentLng},${state.currentLat}.json?access_token=${MAPBOX_KEY}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.features && data.features.length > 0) {
+                const placeName = data.features[0].text || data.features[0].place_name.split(',')[0];
+                document.getElementById('currentLocation').textContent = placeName;
+            }
+        })
+        .catch(err => console.error('Error getting location name:', err));
+    
+    console.log('✅ Storm Surge Weather Dashboard initialized');
+    console.log('Features:');
+    console.log('- NEXRAD Level II Radar Data (AWS)');
+    console.log('- Real-time NWS Weather Alerts');
+    console.log('- Warning Polygons with click handling');
+    console.log('- Skywarn Storm Spotter Reports');
+    console.log('- Multiple Radar Products & Tilt Angles');
+    console.log('- Weather Radio Integration (NWS)');
+    console.log('- Satellite Imagery Mode');
+    console.log('- Mobile-Optimized UI');
+    console.log('- Settings Persistence');
+    console.log('- Feedback System (email)');
+}
 
-// Setup keyboard shortcuts
-setupKeyboardShortcuts();
-
-// Initial warning list update
-setTimeout(() => {
-    loadWarningPolygons();
-}, 1000);
-
-console.log('Storm Surge Weather Dashboard initialized successfully!');
-console.log('Features:');
-console.log('- NEXRAD Level II Dual-Polarization Radar Data');
-console.log('- Real-time Weather Alerts & Warning Polygons');
-console.log('- Precipitation Type Classification');
-console.log('- 60-minute Radar Animation Loop');
-console.log('- Multiple Radar Products & Tilt Angles');
-console.log('- Lightning, Storm Fronts, SPC Outlooks');
-console.log('- TVS Signatures & Storm Tracks');
-console.log('- MPING Reports & TDWR Radars');
-console.log('- Multi-Panel Display');
-console.log('- 2D/3D Map Modes');
-console.log('- Keyboard Shortcuts (press ? for help)');
-console.log('- Feedback System');
-console.log('- Auto-refresh every 5-10 minutes');
-console.log('- Fully Responsive Design');
-console.log('Weather data: Open-Meteo API (Fahrenheit)');
-console.log('Radar data: RainViewer NEXRAD Data');
-console.log('Alerts: National Weather Service API');
-console.log('Click anywhere on the map to get weather information for that location.');
+// Start the app when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
 
 // ========================================
 //  JAVASCRIPT ENDS HERE
