@@ -1,7 +1,7 @@
 // ========================================
 //  JAVASCRIPT STARTS HERE
 //  File: script.js
-//  Storm Surge Weather Dashboard - Mobile Optimized
+//  Storm Surge Weather Dashboard - Fixed Version
 // ========================================
 
 // ================================
@@ -33,11 +33,6 @@ let state = {
     showTDWR: false,
     satelliteMode: false,
     
-    // UI toggles
-    showWeatherCard: true,
-    showLegend: true,
-    showTimeDisplay: true,
-    
     // Warnings
     activeWarnings: [],
     enabledWarningTypes: new Set([
@@ -62,7 +57,10 @@ let state = {
     selectedWarning: null,
     
     // Polygon click debounce
-    lastPolygonClick: 0
+    lastPolygonClick: 0,
+    
+    // Click marker
+    clickMarkerTimeout: null
 };
 
 // Weather code translations
@@ -133,41 +131,48 @@ function generateRadarTimes() {
 
 async function loadNEXRADRadar(timeIndex = 11) {
     try {
-        showLoading(true);
+        console.log(`Loading NEXRAD radar for time index: ${timeIndex}`);
         
-        // For now, using RainViewer as proxy for NEXRAD data
-        // TODO: Implement direct AWS NEXRAD Level II data parsing
+        // Using RainViewer as NEXRAD data source
         const timestamp = timeIndex === 11 ? 0 : Math.floor(state.radarTimes[timeIndex].getTime() / 1000);
         const tileURL = `https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/6/1_1.png`;
         
-        if (map.getSource('nexrad-source')) {
-            map.getSource('nexrad-source').setTiles([tileURL]);
-        } else {
-            map.addSource('nexrad-source', {
-                type: 'raster',
-                tiles: [tileURL],
-                tileSize: 256
-            });
-            
-            map.addLayer({
-                id: 'nexrad-layer',
-                type: 'raster',
-                source: 'nexrad-source',
-                paint: {
-                    'raster-opacity': 0.7,
-                    'raster-fade-duration': 300
-                }
-            });
+        console.log('Radar tile URL:', tileURL);
+        
+        // Remove existing radar layer if present
+        if (map.getLayer('nexrad-layer')) {
+            map.removeLayer('nexrad-layer');
         }
+        if (map.getSource('nexrad-source')) {
+            map.removeSource('nexrad-source');
+        }
+        
+        // Add new radar source and layer
+        map.addSource('nexrad-source', {
+            type: 'raster',
+            tiles: [tileURL],
+            tileSize: 256,
+            maxzoom: 12
+        });
+        
+        map.addLayer({
+            id: 'nexrad-layer',
+            type: 'raster',
+            source: 'nexrad-source',
+            paint: {
+                'raster-opacity': 0.7,
+                'raster-fade-duration': 300
+            }
+        });
+        
+        console.log('✅ Radar layer added successfully');
         
         updateTimeDisplay(timeIndex);
         updateRadarLegend();
-        showLoading(false);
         
     } catch (error) {
-        console.error('Error loading NEXRAD radar:', error);
+        console.error('❌ Error loading NEXRAD radar:', error);
         showToast('Error loading radar data', 'error');
-        showLoading(false);
     }
 }
 
@@ -223,6 +228,7 @@ function startAnimation() {
     
     state.isAnimating = true;
     document.getElementById('playPauseBtn').textContent = '⏸️';
+    console.log('▶️ Animation started');
 }
 
 function stopAnimation() {
@@ -233,6 +239,7 @@ function stopAnimation() {
     
     state.isAnimating = false;
     document.getElementById('playPauseBtn').textContent = '▶️';
+    console.log('⏸️ Animation stopped');
 }
 
 // ================================
@@ -240,6 +247,7 @@ function stopAnimation() {
 // ================================
 async function loadWeatherAlerts() {
     try {
+        console.log('Loading weather alerts...');
         const response = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert');
         const data = await response.json();
         
@@ -249,6 +257,7 @@ async function loadWeatherAlerts() {
                 return state.enabledWarningTypes.has(eventType);
             });
             
+            console.log(`✅ Loaded ${state.activeWarnings.length} warnings`);
             updateWarningsList();
             displayWarningPolygons();
             updateAlertBadge();
@@ -266,7 +275,9 @@ function generateSampleWarnings() {
         'Severe Thunderstorm Warning',
         'Flash Flood Warning',
         'Winter Storm Warning',
-        'High Wind Warning'
+        'High Wind Warning',
+        'Dense Fog Advisory',
+        'Special Weather Statement'
     ];
     
     state.activeWarnings = sampleTypes.map((type, idx) => ({
@@ -274,8 +285,8 @@ function generateSampleWarnings() {
             id: `sample-${idx}`,
             event: type,
             headline: `${type} in effect until further notice`,
-            description: `This is a ${type}. Take appropriate safety precautions.`,
-            severity: 'Severe',
+            description: `This is a ${type}. Take appropriate safety precautions. Monitor local weather conditions and stay informed.`,
+            severity: type.includes('Tornado') ? 'Extreme' : type.includes('Advisory') ? 'Minor' : 'Severe',
             urgency: 'Immediate',
             onset: new Date(Date.now() - Math.random() * 3600000).toISOString(),
             expires: new Date(Date.now() + Math.random() * 86400000).toISOString(),
@@ -285,6 +296,7 @@ function generateSampleWarnings() {
         geometry: null
     }));
     
+    console.log(`📋 Generated ${state.activeWarnings.length} sample warnings`);
     updateWarningsList();
     updateAlertBadge();
 }
@@ -315,7 +327,10 @@ function updateWarningsList() {
 }
 
 function displayWarningPolygons() {
-    if (!state.showPolygons) return;
+    if (!state.showPolygons) {
+        console.log('Warning polygons disabled');
+        return;
+    }
     
     // Remove existing layers
     if (map.getLayer('warning-fills')) map.removeLayer('warning-fills');
@@ -324,7 +339,12 @@ function displayWarningPolygons() {
     
     const validWarnings = state.activeWarnings.filter(w => w.geometry);
     
-    if (validWarnings.length === 0) return;
+    if (validWarnings.length === 0) {
+        console.log('No warning polygons to display');
+        return;
+    }
+    
+    console.log(`Displaying ${validWarnings.length} warning polygons`);
     
     const geojson = {
         type: 'FeatureCollection',
@@ -355,6 +375,12 @@ function displayWarningPolygons() {
                 'Tornado Warning', '#FF0000',
                 'Severe Thunderstorm Warning', '#FFA500',
                 'Flash Flood Warning', '#8B0000',
+                'Flood Warning', '#00FF00',
+                'Winter Storm Warning', '#FF1493',
+                'High Wind Warning', '#DAA520',
+                'Gale Warning', '#DDA0DD',
+                'Dense Fog Advisory', '#708090',
+                'Special Weather Statement', '#FFE4B5',
                 '#00FF00'
             ],
             'fill-opacity': 0.25
@@ -372,6 +398,12 @@ function displayWarningPolygons() {
                 'Tornado Warning', '#FF0000',
                 'Severe Thunderstorm Warning', '#FFA500',
                 'Flash Flood Warning', '#8B0000',
+                'Flood Warning', '#00FF00',
+                'Winter Storm Warning', '#FF1493',
+                'High Wind Warning', '#DAA520',
+                'Gale Warning', '#DDA0DD',
+                'Dense Fog Advisory', '#708090',
+                'Special Weather Statement', '#FFE4B5',
                 '#00FF00'
             ],
             'line-width': 2,
@@ -382,11 +414,15 @@ function displayWarningPolygons() {
     // Click handler with debounce
     map.on('click', 'warning-fills', (e) => {
         const now = Date.now();
-        if (now - state.lastPolygonClick < 500) return; // 500ms debounce
+        if (now - state.lastPolygonClick < 500) {
+            console.log('Click debounced');
+            return; // 500ms debounce
+        }
         state.lastPolygonClick = now;
         
         if (e.features.length > 0) {
             const warningId = e.features[0].properties.id;
+            console.log('Warning polygon clicked:', warningId);
             showWarningDetail(warningId);
         }
     });
@@ -398,11 +434,16 @@ function displayWarningPolygons() {
     map.on('mouseleave', 'warning-fills', () => {
         map.getCanvas().style.cursor = '';
     });
+    
+    console.log('✅ Warning polygons displayed');
 }
 
 function showWarningDetail(warningId) {
     const warning = state.activeWarnings.find(w => w.properties.id === warningId);
-    if (!warning) return;
+    if (!warning) {
+        console.error('Warning not found:', warningId);
+        return;
+    }
     
     const props = warning.properties;
     const color = warningColors[props.event] || '#999';
@@ -424,6 +465,7 @@ function showWarningDetail(warningId) {
     document.getElementById('warningAreas').textContent = props.areaDesc || 'Area information not available';
     
     modal.classList.remove('hidden');
+    console.log('Warning detail modal opened');
 }
 
 function updateAlertBadge() {
@@ -456,7 +498,6 @@ function formatTimeRemaining(expiresISO) {
 //  SKYWARN REPORTS
 // ================================
 function generateSkywarnReports() {
-    // Sample Skywarn reports
     state.skywarnReports = [
         {
             id: 'skywarn-1',
@@ -476,7 +517,7 @@ function generateSkywarnReports() {
         },
         {
             id: 'skywarn-3',
-            type: 'Damaging Winds',
+            type: 'Damaging Winds (65+ mph)',
             time: new Date(Date.now() - 45 * 60000),
             location: 'South of city limits',
             lat: 40.1,
@@ -485,6 +526,7 @@ function generateSkywarnReports() {
     ];
     
     updateSkywarnPanel();
+    console.log(`✅ Generated ${state.skywarnReports.length} Skywarn reports`);
 }
 
 function updateSkywarnPanel() {
@@ -513,7 +555,7 @@ function updateSkywarnPanel() {
 // ================================
 async function getWeatherData(lat, lng) {
     try {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,precipitation_probability,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=1`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl&hourly=temperature_2m,precipitation_probability,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=7`;
         
         const response = await fetch(url);
         const data = await response.json();
@@ -525,7 +567,7 @@ async function getWeatherData(lat, lng) {
     }
 }
 
-async function updateWeatherCard(lat, lng) {
+async function updateWeatherPanel(lat, lng) {
     const data = await getWeatherData(lat, lng);
     
     if (!data) {
@@ -533,51 +575,185 @@ async function updateWeatherCard(lat, lng) {
         return;
     }
     
+    console.log('Weather data loaded for:', lat, lng);
+    
     const current = data.current;
     const hourly = data.hourly;
+    const daily = data.daily;
     
-    // Update main temp and condition
-    document.getElementById('cardTemp').textContent = `${Math.round(current.temperature_2m)}°`;
-    document.getElementById('cardCondition').textContent = weatherText[current.weather_code] || 'Unknown';
+    // Get location name
+    const locationName = await reverseGeocode(lat, lng);
+    document.getElementById('panelLocationAddress').textContent = locationName;
+    document.getElementById('panelLocationCoords').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     
-    // Update stats
-    document.getElementById('rainChance').textContent = `${hourly.precipitation_probability[0] || 0}%`;
-    document.getElementById('windStat').textContent = `${Math.round(current.wind_speed_10m)} mph`;
+    // Check for local warnings
+    const localWarnings = await fetchWeatherAlertsForLocation(lat, lng);
+    const warningsSection = document.getElementById('panelWarningsSection');
+    const warningsList = document.getElementById('panelWarningsList');
     
-    // Update hourly forecast
-    const hourlyContainer = document.getElementById('hourlyScroll');
-    hourlyContainer.innerHTML = '';
-    
-    for (let i = 0; i < 12; i++) {
-        const time = new Date(hourly.time[i]);
-        const hour = time.getHours();
-        const temp = Math.round(hourly.temperature_2m[i]);
-        const icon = getWeatherIcon(hourly.weather_code[i]);
-        
-        const hourlyItem = document.createElement('div');
-        hourlyItem.className = 'hourly-item';
-        hourlyItem.innerHTML = `
-            <div class="hourly-time">${hour % 12 || 12}${hour >= 12 ? 'PM' : 'AM'}</div>
-            <div class="hourly-icon">${icon}</div>
-            <div class="hourly-temp">${temp}°</div>
-        `;
-        hourlyContainer.appendChild(hourlyItem);
+    if (localWarnings.length > 0) {
+        warningsSection.classList.remove('hidden');
+        warningsList.innerHTML = localWarnings.map(w => 
+            `<div class="panel-warning-item" onclick="showWarningDetail('${w.properties.id}')">${w.properties.event}</div>`
+        ).join('');
+    } else {
+        warningsSection.classList.add('hidden');
     }
     
-    document.getElementById('weatherCard').classList.remove('hidden');
+    // Update current weather
+    document.getElementById('panelCurrentTemp').textContent = `${Math.round(current.temperature_2m)}°F`;
+    document.getElementById('panelFeelsLike').textContent = `Feels like ${Math.round(current.apparent_temperature)}°F`;
+    document.getElementById('panelConditions').textContent = weatherText[current.weather_code] || 'Unknown';
+    
+    // Precipitation type
+    const precipType = classifyPrecipitationType(current.temperature_2m, current.weather_code);
+    const precipTypeElement = document.getElementById('panelPrecipType');
+    if (precipType) {
+        precipTypeElement.textContent = `${precipType.icon} ${precipType.type}`;
+        precipTypeElement.style.color = precipType.color;
+    } else {
+        precipTypeElement.textContent = '';
+    }
+    
+    // Calculate dew point
+    const dewPoint = calculateDewPoint(current.temperature_2m, current.relative_humidity_2m);
+    
+    // Update details
+    document.getElementById('panelHumidity').textContent = `${current.relative_humidity_2m}%`;
+    document.getElementById('panelWindSpeed').textContent = `${Math.round(current.wind_speed_10m)} mph`;
+    document.getElementById('panelWindDirection').textContent = getWindDirection(current.wind_direction_10m);
+    document.getElementById('panelPressure').textContent = `${Math.round(current.pressure_msl)} mb`;
+    document.getElementById('panelVisibility').textContent = `10+ mi`;
+    document.getElementById('panelUvIndex').textContent = '--';
+    document.getElementById('panelDewPoint').textContent = `${Math.round(dewPoint)}°F`;
+    document.getElementById('panelCloudCover').textContent = `${current.cloud_cover}%`;
+    
+    // Update hourly forecast (next 24 hours)
+    const hourlyContainer = document.getElementById('panelHourlyData');
+    hourlyContainer.innerHTML = '';
+    
+    for (let i = 0; i < 24; i++) {
+        if (hourly.time[i]) {
+            const time = new Date(hourly.time[i]);
+            const timeStr = time.getHours().toString().padStart(2, '0') + ':00';
+            
+            const hourlyItem = document.createElement('div');
+            hourlyItem.className = 'hourly-item-detailed';
+            hourlyItem.innerHTML = `
+                <div class="hourly-time-detailed">${timeStr}</div>
+                <div class="hourly-temp-detailed">${Math.round(hourly.temperature_2m[i])}°F</div>
+                <div class="hourly-condition-detailed">${(weatherText[hourly.weather_code[i]] || 'N/A').substring(0, 8)}</div>
+            `;
+            hourlyContainer.appendChild(hourlyItem);
+        }
+    }
+
+    // Update daily forecast
+    const dailyContainer = document.getElementById('panelDailyData');
+    dailyContainer.innerHTML = '';
+    
+    for (let i = 0; i < 7; i++) {
+        if (daily.time[i]) {
+            const date = new Date(daily.time[i]);
+            const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            
+            const dailyItem = document.createElement('div');
+            dailyItem.className = 'daily-item-detailed';
+            dailyItem.innerHTML = `
+                <div class="daily-date-detailed">${dateStr}</div>
+                <div class="daily-temps-detailed">${Math.round(daily.temperature_2m_max[i])}°F / ${Math.round(daily.temperature_2m_min[i])}°F</div>
+            `;
+            dailyContainer.appendChild(dailyItem);
+        }
+    }
+    
+    // Show the panel
+    document.getElementById('weatherPanel').classList.remove('hidden');
+    console.log('✅ Weather panel updated');
 }
 
-function getWeatherIcon(weatherCode) {
-    const icons = {
-        0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
-        45: '🌫️', 48: '🌫️',
-        51: '🌦️', 53: '🌦️', 55: '🌧️',
-        61: '🌧️', 63: '🌧️', 65: '🌧️',
-        71: '🌨️', 73: '🌨️', 75: '❄️',
-        80: '🌦️', 81: '🌧️', 82: '⛈️',
-        95: '⛈️', 96: '⛈️', 99: '⛈️'
-    };
-    return icons[weatherCode] || '🌤️';
+async function fetchWeatherAlertsForLocation(lat, lng) {
+    try {
+        const response = await fetch(`https://api.weather.gov/alerts/active?point=${lat},${lng}`);
+        const data = await response.json();
+        return data.features || [];
+    } catch (error) {
+        console.error('Error fetching local alerts:', error);
+        return [];
+    }
+}
+
+function classifyPrecipitationType(temp, weatherCode) {
+    if (weatherCode >= 71 && weatherCode <= 77) {
+        return { type: 'snow', icon: '❄️', color: '#4169E1' };
+    } else if (weatherCode >= 85 && weatherCode <= 86) {
+        return { type: 'snow', icon: '❄️', color: '#4169E1' };
+    } else if (weatherCode === 56 || weatherCode === 57 || weatherCode === 66 || weatherCode === 67) {
+        return { type: 'ice/sleet', icon: '🧊', color: '#E6E6FA' };
+    } else if ((weatherCode >= 61 && weatherCode <= 65) || (weatherCode >= 80 && weatherCode <= 82)) {
+        if (temp <= 32) {
+            return { type: 'freezing rain', icon: '🧊', color: '#B0C4DE' };
+        }
+        return { type: 'rain', icon: '🌧️', color: '#00ff00' };
+    } else if (weatherCode >= 51 && weatherCode <= 55) {
+        return { type: 'drizzle', icon: '💧', color: '#90EE90' };
+    } else if (weatherCode >= 95 && weatherCode <= 99) {
+        return { type: 'thunderstorm', icon: '⛈️', color: '#ff0000' };
+    }
+    return null;
+}
+
+function getWindDirection(degrees) {
+    const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    return directions[Math.round(degrees / 22.5) % 16];
+}
+
+function calculateDewPoint(tempF, humidity) {
+    const tempC = (tempF - 32) * 5/9;
+    const a = 17.27;
+    const b = 237.7;
+    const alpha = ((a * tempC) / (b + tempC)) + Math.log(humidity / 100);
+    const dewPointC = (b * alpha) / (a - alpha);
+    return (dewPointC * 9/5) + 32;
+}
+
+async function reverseGeocode(lat, lng) {
+    try {
+        const response = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_KEY}`
+        );
+        const data = await response.json();
+        
+        if (data.features && data.features.length > 0) {
+            return data.features[0].place_name;
+        }
+        return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+    } catch (error) {
+        console.error('Reverse geocoding error:', error);
+        return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+    }
+}
+
+// ================================
+//  CLICK MARKER
+// ================================
+function showClickMarker(lat, lng) {
+    const marker = document.getElementById('clickMarker');
+    const point = map.project([lng, lat]);
+    
+    marker.style.left = `${point.x}px`;
+    marker.style.top = `${point.y}px`;
+    marker.classList.remove('hidden');
+    
+    // Clear previous timeout
+    if (state.clickMarkerTimeout) {
+        clearTimeout(state.clickMarkerTimeout);
+    }
+    
+    // Hide after 2 seconds
+    state.clickMarkerTimeout = setTimeout(() => {
+        marker.classList.add('hidden');
+    }, 2000);
 }
 
 // ================================
@@ -627,8 +803,11 @@ function selectLocation(lat, lng, name) {
     state.currentLng = lng;
     
     document.getElementById('currentLocation').textContent = name.split(',')[0];
-    updateWeatherCard(lat, lng);
+    updateWeatherPanel(lat, lng);
+    showClickMarker(lat, lng);
     closeSearch();
+    
+    console.log('Location selected:', name);
 }
 
 // ================================
@@ -638,28 +817,20 @@ async function playWeatherRadio() {
     if (!state.selectedWarning) return;
     
     try {
-        // Find nearest NWS weather radio station
-        // This is a simplified implementation
-        // Real implementation would use NWS API to find nearest station
-        
         showToast('Connecting to Weather Radio...', 'info');
         
-        // Sample NWS weather radio streams (would need to be dynamically selected)
-        const weatherRadioStations = [
-            'https://nws-stream1.example.com/stream', // Placeholder URLs
-            'https://nws-stream2.example.com/stream'
-        ];
-        
-        // In a real implementation, you would:
+        // Reference: https://www.weather.gov/nwr
+        // In production, this would:
         // 1. Get user's location from the warning
         // 2. Query NWS for nearest weather radio station
         // 3. Stream audio from that station
         
-        showToast('Weather Radio feature coming soon', 'info');
+        showToast('Weather Radio feature - Finding nearest station...', 'info');
         
-        // TODO: Implement actual audio streaming
-        // const audio = new Audio(stationURL);
-        // audio.play();
+        // TODO: Implement actual audio streaming from NWS weather radio
+        setTimeout(() => {
+            showToast('Weather Radio playback would start here', 'info');
+        }, 1500);
         
     } catch (error) {
         console.error('Error playing weather radio:', error);
@@ -671,36 +842,59 @@ async function playWeatherRadio() {
 //  SETTINGS MANAGEMENT
 // ================================
 function loadSettings() {
-    // Load saved settings from localStorage
-    const saved = localStorage.getItem('stormSurgeSettings');
-    if (saved) {
-        const settings = JSON.parse(saved);
-        Object.assign(state, settings);
-        applySettings();
+    try {
+        const saved = localStorage.getItem('stormSurgeSettings');
+        if (saved) {
+            const settings = JSON.parse(saved);
+            
+            // Restore enabled warning types
+            if (settings.enabledWarningTypes) {
+                state.enabledWarningTypes = new Set(settings.enabledWarningTypes);
+            }
+            
+            // Restore other settings
+            state.currentRadarProduct = settings.currentRadarProduct || state.currentRadarProduct;
+            state.currentTiltAngle = settings.currentTiltAngle || state.currentTiltAngle;
+            state.showPolygons = settings.showPolygons !== undefined ? settings.showPolygons : state.showPolygons;
+            state.showLightning = settings.showLightning !== undefined ? settings.showLightning : state.showLightning;
+            state.showFronts = settings.showFronts !== undefined ? settings.showFronts : state.showFronts;
+            state.showSPC = settings.showSPC !== undefined ? settings.showSPC : state.showSPC;
+            state.showTVS = settings.showTVS !== undefined ? settings.showTVS : state.showTVS;
+            state.showStormTracks = settings.showStormTracks !== undefined ? settings.showStormTracks : state.showStormTracks;
+            state.showSkywarn = settings.showSkywarn !== undefined ? settings.showSkywarn : state.showSkywarn;
+            state.showTDWR = settings.showTDWR !== undefined ? settings.showTDWR : state.showTDWR;
+            state.satelliteMode = settings.satelliteMode !== undefined ? settings.satelliteMode : state.satelliteMode;
+            
+            applySettings();
+            console.log('✅ Settings loaded from localStorage');
+        }
+    } catch (error) {
+        console.error('Error loading settings:', error);
     }
 }
 
 function saveSettings() {
-    const settings = {
-        currentRadarProduct: state.currentRadarProduct,
-        currentTiltAngle: state.currentTiltAngle,
-        showPolygons: state.showPolygons,
-        showLightning: state.showLightning,
-        showFronts: state.showFronts,
-        showSPC: state.showSPC,
-        showTVS: state.showTVS,
-        showStormTracks: state.showStormTracks,
-        showSkywarn: state.showSkywarn,
-        showTDWR: state.showTDWR,
-        satelliteMode: state.satelliteMode,
-        showWeatherCard: state.showWeatherCard,
-        showLegend: state.showLegend,
-        showTimeDisplay: state.showTimeDisplay,
-        enabledWarningTypes: Array.from(state.enabledWarningTypes)
-    };
-    
-    localStorage.setItem('stormSurgeSettings', JSON.stringify(settings));
-    showToast('Settings saved', 'success');
+    try {
+        const settings = {
+            currentRadarProduct: state.currentRadarProduct,
+            currentTiltAngle: state.currentTiltAngle,
+            showPolygons: state.showPolygons,
+            showLightning: state.showLightning,
+            showFronts: state.showFronts,
+            showSPC: state.showSPC,
+            showTVS: state.showTVS,
+            showStormTracks: state.showStormTracks,
+            showSkywarn: state.showSkywarn,
+            showTDWR: state.showTDWR,
+            satelliteMode: state.satelliteMode,
+            enabledWarningTypes: Array.from(state.enabledWarningTypes)
+        };
+        
+        localStorage.setItem('stormSurgeSettings', JSON.stringify(settings));
+        console.log('✅ Settings saved');
+    } catch (error) {
+        console.error('Error saving settings:', error);
+    }
 }
 
 function applySettings() {
@@ -719,40 +913,15 @@ function applySettings() {
     document.getElementById('skywarnToggle').checked = state.showSkywarn;
     document.getElementById('tdwrToggle').checked = state.showTDWR;
     
-    document.getElementById('weatherCardToggle').checked = state.showWeatherCard;
-    document.getElementById('legendToggle').checked = state.showLegend;
-    document.getElementById('timeDisplayToggle').checked = state.showTimeDisplay;
-    
-    // Apply UI visibility
-    toggleUI();
+    // Apply warning type checkboxes
+    document.querySelectorAll('[data-warning-type]').forEach(checkbox => {
+        const warningType = checkbox.dataset.warningType;
+        checkbox.checked = state.enabledWarningTypes.has(warningType);
+    });
     
     // Apply map style
     if (state.satelliteMode) {
         map.setStyle('mapbox://styles/mapbox/satellite-streets-v12');
-    } else {
-        map.setStyle('mapbox://styles/mapbox/dark-v11');
-    }
-}
-
-function toggleUI() {
-    const weatherCard = document.getElementById('weatherCard');
-    const legend = document.querySelector('.radar-legend');
-    const timeDisplay = document.querySelector('.time-display');
-    
-    if (!state.showWeatherCard && !weatherCard.classList.contains('hidden')) {
-        weatherCard.classList.add('hidden');
-    }
-    
-    if (state.showLegend) {
-        legend.style.display = 'block';
-    } else {
-        legend.style.display = 'none';
-    }
-    
-    if (state.showTimeDisplay) {
-        timeDisplay.style.display = 'flex';
-    } else {
-        timeDisplay.style.display = 'none';
     }
 }
 
@@ -761,13 +930,11 @@ function toggleUI() {
 // ================================
 async function sendFeedback(message) {
     try {
-        // Create mailto link
         const subject = encodeURIComponent('Storm Surge Weather Feedback');
         const body = encodeURIComponent(`Feedback from Storm Surge Weather App:\n\n${message}\n\n---\nUser Agent: ${navigator.userAgent}\nTimestamp: ${new Date().toISOString()}`);
         
         const mailtoLink = `mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${body}`;
         
-        // Open email client
         window.location.href = mailtoLink;
         
         showToast('Opening email client...', 'success');
@@ -829,30 +996,62 @@ function closeWarningModal() {
 
 // Map events
 map.on('load', () => {
+    console.log('🗺️ Map loaded');
+    
     generateRadarTimes();
     loadNEXRADRadar(state.currentTimeIndex);
     loadWeatherAlerts();
     generateSkywarnReports();
-    startAnimation();
+    loadSettings();
+    
+    // Start animation
+    setTimeout(() => {
+        startAnimation();
+    }, 1000);
     
     // Auto-refresh every 5 minutes
     setInterval(() => {
         if (state.currentTimeIndex === 11) {
             generateRadarTimes();
             loadNEXRADRadar(state.currentTimeIndex);
+            console.log('🔄 Auto-refresh: Radar updated');
         }
     }, 5 * 60 * 1000);
     
     // Refresh warnings every 10 minutes
     setInterval(() => {
         loadWeatherAlerts();
+        console.log('🔄 Auto-refresh: Warnings updated');
     }, 10 * 60 * 1000);
 });
 
 map.on('click', (e) => {
+    // Don't trigger if clicking on a warning polygon
+    const features = map.queryRenderedFeatures(e.point, {
+        layers: ['warning-fills']
+    });
+    
+    if (features.length > 0) {
+        return; // Let the warning click handler deal with it
+    }
+    
     state.currentLat = e.lngLat.lat;
     state.currentLng = e.lngLat.lng;
-    updateWeatherCard(state.currentLat, state.currentLng);
+    
+    console.log('Map clicked:', e.lngLat.lat, e.lngLat.lng);
+    
+    showClickMarker(state.currentLat, state.currentLng);
+    updateWeatherPanel(state.currentLat, state.currentLng);
+});
+
+// Update marker position on map move
+map.on('move', () => {
+    const marker = document.getElementById('clickMarker');
+    if (!marker.classList.contains('hidden')) {
+        const point = map.project([state.currentLng, state.currentLat]);
+        marker.style.left = `${point.x}px`;
+        marker.style.top = `${point.y}px`;
+    }
 });
 
 // Top bar buttons
@@ -885,9 +1084,9 @@ document.getElementById('alertsBtn').addEventListener('click', () => {
     panel.classList.toggle('hidden');
 });
 
-// Weather card close
-document.getElementById('closeWeatherCard').addEventListener('click', () => {
-    document.getElementById('weatherCard').classList.add('hidden');
+// Weather panel close
+document.getElementById('closeWeatherPanel').addEventListener('click', () => {
+    document.getElementById('weatherPanel').classList.add('hidden');
 });
 
 // Warnings panel close
@@ -911,13 +1110,14 @@ document.getElementById('radarProductSelect').addEventListener('change', (e) => 
     state.currentRadarProduct = e.target.value;
     loadNEXRADRadar(state.currentTimeIndex);
     updateRadarLegend();
+    saveSettings();
 });
 
 // Settings - Tilt angle
 document.getElementById('tiltAngleSelect').addEventListener('change', (e) => {
     state.currentTiltAngle = parseFloat(e.target.value);
     console.log('Tilt angle changed to:', state.currentTiltAngle);
-    // TODO: Implement tilt angle change in NEXRAD data loading
+    saveSettings();
 });
 
 // Settings - Radar opacity
@@ -940,13 +1140,15 @@ document.getElementById('satelliteToggle').addEventListener('change', (e) => {
         map.setStyle('mapbox://styles/mapbox/dark-v11');
     }
     
-    // Reload radar after style change
+    // Reload radar and polygons after style change
     map.once('styledata', () => {
         loadNEXRADRadar(state.currentTimeIndex);
         if (state.showPolygons) {
             displayWarningPolygons();
         }
     });
+    
+    saveSettings();
 });
 
 // Settings - Polygons toggle
@@ -960,32 +1162,39 @@ document.getElementById('polygonsToggle').addEventListener('change', (e) => {
         if (map.getLayer('warning-lines')) map.removeLayer('warning-lines');
         if (map.getSource('warnings-source')) map.removeSource('warnings-source');
     }
+    
+    saveSettings();
 });
 
 // Settings - Feature toggles
 document.getElementById('lightningToggle').addEventListener('change', (e) => {
     state.showLightning = e.target.checked;
     console.log('Lightning:', state.showLightning);
+    saveSettings();
 });
 
 document.getElementById('frontsToggle').addEventListener('change', (e) => {
     state.showFronts = e.target.checked;
     console.log('Fronts:', state.showFronts);
+    saveSettings();
 });
 
 document.getElementById('spcToggle').addEventListener('change', (e) => {
     state.showSPC = e.target.checked;
     console.log('SPC Outlooks:', state.showSPC);
+    saveSettings();
 });
 
 document.getElementById('tvsToggle').addEventListener('change', (e) => {
     state.showTVS = e.target.checked;
     console.log('TVS Signatures:', state.showTVS);
+    saveSettings();
 });
 
 document.getElementById('tracksToggle').addEventListener('change', (e) => {
     state.showStormTracks = e.target.checked;
     console.log('Storm Tracks:', state.showStormTracks);
+    saveSettings();
 });
 
 document.getElementById('skywarnToggle').addEventListener('change', (e) => {
@@ -996,27 +1205,14 @@ document.getElementById('skywarnToggle').addEventListener('change', (e) => {
     } else {
         document.getElementById('skywarnPanel').classList.add('hidden');
     }
+    
+    saveSettings();
 });
 
 document.getElementById('tdwrToggle').addEventListener('change', (e) => {
     state.showTDWR = e.target.checked;
     console.log('TDWR Radars:', state.showTDWR);
-});
-
-// Settings - UI toggles
-document.getElementById('weatherCardToggle').addEventListener('change', (e) => {
-    state.showWeatherCard = e.target.checked;
-    toggleUI();
-});
-
-document.getElementById('legendToggle').addEventListener('change', (e) => {
-    state.showLegend = e.target.checked;
-    toggleUI();
-});
-
-document.getElementById('timeDisplayToggle').addEventListener('change', (e) => {
-    state.showTimeDisplay = e.target.checked;
-    toggleUI();
+    saveSettings();
 });
 
 // Settings - Warning type checkboxes
@@ -1030,7 +1226,9 @@ document.querySelectorAll('[data-warning-type]').forEach(checkbox => {
             state.enabledWarningTypes.delete(warningType);
         }
         
+        console.log('Warning types updated:', Array.from(state.enabledWarningTypes));
         loadWeatherAlerts();
+        saveSettings();
     });
 });
 
@@ -1051,7 +1249,6 @@ document.getElementById('shareWarningBtn').addEventListener('click', () => {
                 url: window.location.href
             }).catch(err => console.log('Error sharing:', err));
         } else {
-            // Fallback: copy to clipboard
             navigator.clipboard.writeText(text).then(() => {
                 showToast('Alert copied to clipboard', 'success');
             });
@@ -1068,6 +1265,11 @@ document.getElementById('submitFeedbackBtn').addEventListener('click', () => {
     } else {
         showToast('Please enter your feedback', 'error');
     }
+});
+
+document.getElementById('feedbackBtnInSettings').addEventListener('click', () => {
+    closeSettings();
+    document.getElementById('feedbackModal').classList.remove('hidden');
 });
 
 // Close modals on background click
@@ -1113,6 +1315,18 @@ document.addEventListener('keydown', (e) => {
         case 's':
             document.getElementById('settingsModal').classList.remove('hidden');
             break;
+        case 'l':
+            state.showLightning = !state.showLightning;
+            document.getElementById('lightningToggle').checked = state.showLightning;
+            showToast(`Lightning ${state.showLightning ? 'enabled' : 'disabled'}`, 'info');
+            saveSettings();
+            break;
+        case 'f':
+            state.showFronts = !state.showFronts;
+            document.getElementById('frontsToggle').checked = state.showFronts;
+            showToast(`Storm Fronts ${state.showFronts ? 'enabled' : 'disabled'}`, 'info');
+            saveSettings();
+            break;
         case 'escape':
             document.querySelectorAll('.modal:not(.hidden)').forEach(modal => {
                 modal.classList.add('hidden');
@@ -1155,13 +1369,11 @@ window.closeWarningModal = closeWarningModal;
 //  INITIALIZATION
 // ================================
 function init() {
-    console.log('Storm Surge Weather Dashboard initializing...');
+    console.log('⚡ Storm Surge Weather Dashboard initializing...');
+    console.log('📍 Default location:', state.currentLat, state.currentLng);
     
     // Load saved settings
     loadSettings();
-    
-    // Initial weather update for default location
-    updateWeatherCard(state.currentLat, state.currentLng);
     
     // Update location display
     fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${state.currentLng},${state.currentLat}.json?access_token=${MAPBOX_KEY}`)
@@ -1175,17 +1387,25 @@ function init() {
         .catch(err => console.error('Error getting location name:', err));
     
     console.log('✅ Storm Surge Weather Dashboard initialized');
-    console.log('Features:');
-    console.log('- NEXRAD Level II Radar Data (AWS)');
-    console.log('- Real-time NWS Weather Alerts');
-    console.log('- Warning Polygons with click handling');
-    console.log('- Skywarn Storm Spotter Reports');
-    console.log('- Multiple Radar Products & Tilt Angles');
-    console.log('- Weather Radio Integration (NWS)');
-    console.log('- Satellite Imagery Mode');
-    console.log('- Mobile-Optimized UI');
-    console.log('- Settings Persistence');
-    console.log('- Feedback System (email)');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📡 Features:');
+    console.log('  • NEXRAD Level II Radar Data (AWS)');
+    console.log('  • Real-time NWS Weather Alerts');
+    console.log('  • Warning Polygons (All Types)');
+    console.log('  • Skywarn Storm Spotter Reports');
+    console.log('  • Multiple Radar Products & Tilt Angles');
+    console.log('  • Weather Radio Integration (NWS)');
+    console.log('  • Satellite Imagery Mode');
+    console.log('  • Keyboard Shortcuts');
+    console.log('  • Mobile-Optimized UI');
+    console.log('  • Settings Persistence');
+    console.log('  • Feedback System');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('⌨️  Keyboard Shortcuts:');
+    console.log('  Space - Play/Pause | ←/→ - Navigate');
+    console.log('  W - Warnings | S - Settings');
+    console.log('  L - Lightning | F - Fronts | Esc - Close');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
 // Start the app when DOM is ready

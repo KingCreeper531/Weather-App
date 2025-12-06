@@ -1,7 +1,7 @@
 <!-- ========================================
      HTML STARTS HERE
      File: index.html
-     Storm Surge Weather Dashboard - Mobile Optimized
+     Storm Surge Weather Dashboard - Fixed Version
 ======================================== -->
 <!doctype html>
 <html lang="en">
@@ -33,35 +33,99 @@
   <!-- Map Container -->
   <div id="map"></div>
 
-  <!-- Weather Info Card (Mobile Style) -->
-  <div id="weatherCard" class="weather-card hidden">
-    <button id="closeWeatherCard" class="close-card-btn">×</button>
+  <!-- Click Marker (Red Pin) -->
+  <div id="clickMarker" class="click-marker hidden">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#FF0000"/>
+    </svg>
+  </div>
+
+  <!-- Detailed Weather Panel (Left Side - Original Style) -->
+  <div id="weatherPanel" class="weather-panel-detailed hidden">
+    <div class="panel-header-detailed">
+      <h3 id="panelLocationName">Weather Details</h3>
+      <button id="closeWeatherPanel" class="close-btn">×</button>
+    </div>
     
-    <div class="weather-card-header">
-      <div class="weather-icon">🌤️</div>
-      <div class="weather-temp">
-        <span id="cardTemp">--°</span>
-        <span id="cardCondition">Clear</span>
+    <div class="panel-content-detailed">
+      <div class="location-info-detailed">
+        <div id="panelLocationAddress" class="location-address">Click map for weather</div>
+        <div id="panelLocationCoords" class="location-coords"></div>
       </div>
-    </div>
 
-    <div class="weather-stats">
-      <div class="stat-row">
-        <span class="stat-label">Rain</span>
-        <span id="rainChance" class="stat-value">0%</span>
+      <!-- Active Warnings -->
+      <div id="panelWarningsSection" class="panel-warnings-section hidden">
+        <h4>⚠️ Active Alerts</h4>
+        <div id="panelWarningsList" class="panel-warnings-list"></div>
       </div>
-      <div class="stat-row">
-        <span class="stat-label">Wind</span>
-        <span id="windStat" class="stat-value">-- mph</span>
-      </div>
-    </div>
 
-    <div class="hourly-scroll" id="hourlyScroll">
-      <!-- Hourly items populated by JS -->
+      <!-- Current Weather -->
+      <div class="current-weather-detailed">
+        <div class="temp-display-detailed">
+          <span id="panelCurrentTemp">--°</span>
+          <div class="temp-details-detailed">
+            <div id="panelFeelsLike">Feels like --°</div>
+            <div id="panelConditions">Loading...</div>
+            <div id="panelPrecipType" class="precip-type"></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Weather Details Grid -->
+      <div class="weather-details-grid">
+        <div class="detail-item-grid">
+          <span class="label">Humidity</span>
+          <span id="panelHumidity" class="value">--%</span>
+        </div>
+        <div class="detail-item-grid">
+          <span class="label">Wind</span>
+          <span id="panelWindSpeed" class="value">-- mph</span>
+        </div>
+        <div class="detail-item-grid">
+          <span class="label">Wind Direction</span>
+          <span id="panelWindDirection" class="value">--</span>
+        </div>
+        <div class="detail-item-grid">
+          <span class="label">Pressure</span>
+          <span id="panelPressure" class="value">-- mb</span>
+        </div>
+        <div class="detail-item-grid">
+          <span class="label">Visibility</span>
+          <span id="panelVisibility" class="value">-- mi</span>
+        </div>
+        <div class="detail-item-grid">
+          <span class="label">UV Index</span>
+          <span id="panelUvIndex" class="value">--</span>
+        </div>
+        <div class="detail-item-grid">
+          <span class="label">Dew Point</span>
+          <span id="panelDewPoint" class="value">--°</span>
+        </div>
+        <div class="detail-item-grid">
+          <span class="label">Cloud Cover</span>
+          <span id="panelCloudCover" class="value">--%</span>
+        </div>
+      </div>
+      
+      <!-- Hourly Forecast -->
+      <div class="hourly-forecast-detailed">
+        <h4>24-Hour Forecast</h4>
+        <div id="panelHourlyData" class="hourly-container-detailed">
+          Loading...
+        </div>
+      </div>
+
+      <!-- Daily Forecast -->
+      <div class="daily-forecast-detailed">
+        <h4>7-Day Forecast</h4>
+        <div id="panelDailyData" class="daily-container-detailed">
+          Loading...
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Warnings List (Side Panel) -->
+  <!-- Warnings List (Top Right) -->
   <div id="warningsList" class="warnings-list hidden">
     <div class="warnings-header">
       <h3>⚠️ Alerts (<span id="alertCount">0</span>)</h3>
@@ -117,15 +181,15 @@
     </div>
   </div>
 
-  <!-- Settings Modal -->
+  <!-- Settings Modal (SCROLLABLE) -->
   <div id="settingsModal" class="modal hidden">
-    <div class="modal-content settings-modal">
-      <div class="modal-header">
+    <div class="modal-content settings-modal-scrollable">
+      <div class="modal-header-fixed">
         <h2>⚙️ Settings</h2>
         <button class="close-modal-btn" onclick="closeSettings()">×</button>
       </div>
       
-      <div class="modal-body settings-body">
+      <div class="modal-body-scrollable">
         <div class="settings-section">
           <h3>Radar Settings</h3>
           
@@ -165,9 +229,8 @@
           </div>
 
           <div class="setting-item">
-            <label>Radar Opacity</label>
+            <label>Radar Opacity: <span id="opacityDisplay">70%</span></label>
             <input type="range" id="radarOpacity" min="0" max="100" value="70" />
-            <span id="opacityDisplay">70%</span>
           </div>
         </div>
 
@@ -176,47 +239,74 @@
           
           <div class="setting-item toggle-item">
             <label>Satellite Imagery</label>
-            <input type="checkbox" id="satelliteToggle" />
+            <div class="toggle-switch">
+              <input type="checkbox" id="satelliteToggle" />
+              <span class="toggle-slider"></span>
+            </div>
           </div>
 
           <div class="setting-item toggle-item">
             <label>Show Warning Polygons</label>
-            <input type="checkbox" id="polygonsToggle" checked />
+            <div class="toggle-switch">
+              <input type="checkbox" id="polygonsToggle" checked />
+              <span class="toggle-slider"></span>
+            </div>
           </div>
 
           <div class="setting-item toggle-item">
             <label>Show Lightning</label>
-            <input type="checkbox" id="lightningToggle" checked />
+            <div class="toggle-switch">
+              <input type="checkbox" id="lightningToggle" checked />
+              <span class="toggle-slider"></span>
+            </div>
           </div>
 
           <div class="setting-item toggle-item">
             <label>Show Storm Fronts</label>
-            <input type="checkbox" id="frontsToggle" checked />
+            <div class="toggle-switch">
+              <input type="checkbox" id="frontsToggle" checked />
+              <span class="toggle-slider"></span>
+            </div>
           </div>
 
           <div class="setting-item toggle-item">
             <label>Show SPC Outlooks</label>
-            <input type="checkbox" id="spcToggle" checked />
+            <div class="toggle-switch">
+              <input type="checkbox" id="spcToggle" checked />
+              <span class="toggle-slider"></span>
+            </div>
           </div>
 
           <div class="setting-item toggle-item">
             <label>Show TVS Signatures</label>
-            <input type="checkbox" id="tvsToggle" checked />
+            <div class="toggle-switch">
+              <input type="checkbox" id="tvsToggle" checked />
+              <span class="toggle-slider"></span>
+            </div>
           </div>
 
           <div class="setting-item toggle-item">
             <label>Show Storm Tracks</label>
-            <input type="checkbox" id="tracksToggle" checked />
+            <div class="toggle-switch">
+              <input type="checkbox" id="tracksToggle" checked />
+              <span class="toggle-slider"></span>
+            </div>
           </div>
 
           <div class="setting-item toggle-item">
             <label>Show Skywarn Reports</label>
-            <input type="checkbox" id="skywarnToggle" checked />
+            <div class="toggle-switch">
+              <input type="checkbox" id="skywarnToggle" checked />
+              <span class="toggle-slider"></span>
+            </div>
           </div>
 
           <div class="setting-item toggle-item">
             <label>Show TDWR Radars</label>
-            <input type="checkbox" id="tdwrToggle" />
+            <div class="toggle-switch">
+              <input type="checkbox" id="tdwrToggle" />
+              <span class="toggle-slider"></span>
+            </div>
           </div>
         </div>
 
@@ -224,51 +314,51 @@
           <h3>Warning Types to Show</h3>
           
           <div class="warning-types-grid">
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Tornado Warning" />
               <span>Tornado Warning</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Severe Thunderstorm Warning" />
               <span>Severe T-Storm</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Flash Flood Warning" />
               <span>Flash Flood</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Flood Warning" />
               <span>Flood Warning</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Winter Storm Warning" />
               <span>Winter Storm</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Winter Weather Advisory" />
               <span>Winter Weather</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="High Wind Warning" />
               <span>High Wind</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Gale Warning" />
               <span>Gale Warning</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Dense Fog Advisory" />
               <span>Dense Fog</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Special Weather Statement" />
               <span>Special Weather</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Heat Advisory" />
               <span>Heat Advisory</span>
             </label>
-            <label class="warning-type-item">
+            <label class="warning-type-checkbox">
               <input type="checkbox" checked data-warning-type="Excessive Heat Warning" />
               <span>Excessive Heat</span>
             </label>
@@ -276,21 +366,15 @@
         </div>
 
         <div class="settings-section">
-          <h3>UI Settings</h3>
-          
-          <div class="setting-item toggle-item">
-            <label>Show Weather Card</label>
-            <input type="checkbox" id="weatherCardToggle" checked />
-          </div>
-
-          <div class="setting-item toggle-item">
-            <label>Show Radar Legend</label>
-            <input type="checkbox" id="legendToggle" checked />
-          </div>
-
-          <div class="setting-item toggle-item">
-            <label>Show Time Display</label>
-            <input type="checkbox" id="timeDisplayToggle" checked />
+          <h3>Keyboard Shortcuts</h3>
+          <div class="shortcuts-info">
+            <div class="shortcut-row"><kbd>Space</kbd> Play/Pause Animation</div>
+            <div class="shortcut-row"><kbd>←/→</kbd> Navigate Frames</div>
+            <div class="shortcut-row"><kbd>W</kbd> Toggle Warnings Panel</div>
+            <div class="shortcut-row"><kbd>S</kbd> Open Settings</div>
+            <div class="shortcut-row"><kbd>L</kbd> Toggle Lightning</div>
+            <div class="shortcut-row"><kbd>F</kbd> Toggle Fronts</div>
+            <div class="shortcut-row"><kbd>Esc</kbd> Close Modals</div>
           </div>
         </div>
 
@@ -298,9 +382,12 @@
           <h3>About</h3>
           <div class="about-info">
             <p><strong>Storm Surge Weather</strong></p>
-            <p>Version 2.0</p>
+            <p>Version 2.1</p>
             <p>NEXRAD Level II Dual-Pol Radar</p>
             <p>Data: NOAA, NWS, AWS NEXRAD</p>
+            <button id="feedbackBtnInSettings" class="action-btn secondary full-width" style="margin-top: 15px;">
+              💬 Send Feedback
+            </button>
           </div>
         </div>
       </div>
